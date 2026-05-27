@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "TOP-R Water",
+    "slug": "top-r-water",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#00B5B0",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}
