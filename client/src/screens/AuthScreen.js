@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
-import { getSession, saveSession } from "../services/session";
+import { createMockSession, getSession, saveSession } from "../services/session";
 
 export default function AuthScreen({ navigation }) {
   const [phone, setPhone] = useState("+91");
@@ -45,6 +45,11 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
+  const continueAsGuest = async () => {
+    await saveSession(createMockSession());
+    navigation.replace("MainTabs");
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white px-5 justify-center">
       <Text className="text-primary text-4xl font-extrabold">TOP-R Water</Text>
@@ -68,8 +73,8 @@ export default function AuthScreen({ navigation }) {
       <TouchableOpacity className="bg-primary rounded-lg py-4 items-center" onPress={otpSent ? verifyOtp : sendOtp}>
         <Text className="text-white font-bold text-base">{loading ? "Please wait..." : otpSent ? "Verify OTP" : "Send OTP"}</Text>
       </TouchableOpacity>
-      <TouchableOpacity className="items-center mt-4" onPress={() => navigation.replace("MainTabs")}>
-        <Text className="text-primary font-bold">Explore demo app</Text>
+      <TouchableOpacity className="bg-accent rounded-lg py-4 items-center mt-4" onPress={continueAsGuest}>
+        <Text className="text-ink font-extrabold">Continue as Guest (Test Mode)</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );

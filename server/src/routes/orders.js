@@ -5,8 +5,9 @@ const router = Router();
 
 router.post("/", async (req, res, next) => {
   try {
-    const { user_id, address_id, items = [], total_amount, delivery_date } = req.body;
-    if (!user_id || !address_id || !items.length) {
+    const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery" } = req.body;
+    const orderType = type === "return" ? "return" : "delivery";
+    if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
       return res.status(400).json({ error: "user_id, address_id, and items are required" });
     }
 
@@ -14,19 +15,33 @@ router.post("/", async (req, res, next) => {
     const normalizedItems = items.map((item) => ({
       product_id: item.product_id || item.id,
       quantity: Number(item.quantity || 0),
-      unit_price: Number(item.unit_price ?? item.price ?? 0)
+      unit_price: orderType === "return" ? 0 : Number(item.unit_price ?? item.price ?? 0)
     }));
 
-    if (normalizedItems.some((item) => !item.product_id || item.quantity <= 0 || item.unit_price <= 0)) {
+    if (normalizedItems.some((item) => !item.product_id || item.quantity <= 0 || item.unit_price < 0)) {
       return res.status(400).json({ error: "Each item requires product_id, quantity, and unit_price" });
     }
 
     const computedTotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-    const { data: order, error: orderError } = await supabase
+    const orderPayload = {
+      user_id,
+      address_id: address_id || null,
+      total_amount: total_amount ?? computedTotal,
+      delivery_date,
+      status: "Placed",
+      order_type: orderType
+    };
+    let { data: order, error: orderError } = await supabase
       .from("orders")
-      .insert({ user_id, address_id, total_amount: total_amount ?? computedTotal, delivery_date, status: "Placed" })
+      .insert(orderPayload)
       .select()
       .single();
+    if (orderError?.message?.includes("order_type")) {
+      const { order_type, ...fallbackPayload } = orderPayload;
+      const fallback = await supabase.from("orders").insert(fallbackPayload).select().single();
+      order = fallback.data;
+      orderError = fallback.error;
+    }
     if (orderError) throw orderError;
 
     const orderItems = normalizedItems.map((item) => ({
@@ -39,6 +54,7 @@ router.post("/", async (req, res, next) => {
     if (itemsError) throw itemsError;
 
     for (const item of normalizedItems) {
+      if (orderType === "return") continue;
       const { data: inventory, error: inventoryError } = await supabase
         .from("inventory")
         .select("id, quantity_available")

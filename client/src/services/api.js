@@ -1,4 +1,4 @@
-const API_URL = process.env.EXPO_PUBLIC_CLIENT_API_URL || "http://localhost:4000";
+const API_URL = process.env.EXPO_PUBLIC_CLIENT_API_URL || "http://192.168.29.179:4000";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -20,9 +20,12 @@ export const api = {
   getProducts: () => request("/products"),
   getUser: (userId) => request(`/users/${userId}`),
   getAddresses: (userId) => request(`/addresses/${userId}`),
+  addAddress: (address) => request("/addresses", { method: "POST", body: JSON.stringify(address) }),
+  updateAddress: (id, updates) => request(`/addresses/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
+  deleteAddress: (id) => request(`/addresses/${id}`, { method: "DELETE" }),
   placeOrder: (order) => request("/orders", { method: "POST", body: JSON.stringify(order) }),
   getOrders: (userId) => request(`/orders/${userId}`),
-  getSubscriptions: (userId) => request(`/subscriptions/${userId}`),
+  getSubscriptions: (userId, status) => request(`/subscriptions/${userId}${status ? `?status=${status}` : ""}`),
   createSubscription: (subscription) =>
     request("/subscriptions", { method: "POST", body: JSON.stringify(subscription) }),
   updateSubscription: (id, updates) =>

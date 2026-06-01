@@ -4,11 +4,11 @@ import { requireSupabase } from "../config/supabase.js";
 const router = Router();
 const JAR_DEPOSIT = 250;
 const WATER_CHARGE = 40;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 router.post("/", async (req, res, next) => {
   try {
-    const { user_id, product_id, address_id, frequency, start_date, quantity, jar_count } = req.body;
+    const { user_id, product_id, address_id, frequency, start_date, quantity, jar_count, status } = req.body;
     if (!user_id || !product_id || !frequency || !start_date) {
       return res.status(400).json({ error: "user_id, product_id, frequency, and start_date are required" });
     }
@@ -40,7 +40,7 @@ router.post("/", async (req, res, next) => {
         address_id: resolvedAddressId,
         frequency,
         start_date,
-        status: "Active",
+        status: status || "Pending",
         quantity: jars,
         jar_count: jars,
         jar_deposit: jarDeposit,
@@ -64,7 +64,7 @@ router.post("/", async (req, res, next) => {
         jar_deposit: jarDeposit,
         water_charge_per_delivery: waterCharge,
         deposit_refunded: false,
-        status: "Active"
+        status: status || "Pending"
       })
       .select()
       .single();
@@ -77,11 +77,15 @@ router.post("/", async (req, res, next) => {
 
 router.get("/:userId", async (req, res, next) => {
   try {
-    const { data, error } = await requireSupabase()
+    let query = requireSupabase()
       .from("subscriptions")
       .select("*, products(*), addresses(*)")
       .eq("user_id", req.params.userId)
       .order("start_date");
+    if (req.query.status) {
+      query = query.eq("status", req.query.status);
+    }
+    const { data, error } = await query;
     if (error) throw error;
     res.json(data);
   } catch (error) {
@@ -107,13 +111,19 @@ router.patch("/:id", async (req, res, next) => {
       updates.status === "Cancelled" &&
       (req.body.jars_returned === true || req.body.return_jars === true || req.body.confirm_return === true);
 
-    if (wantsRefund) {
+    let existingSubscription = null;
+    if (updates.status === "Active" || wantsRefund) {
       const { data: subscription, error: subscriptionError } = await supabase
         .from("subscriptions")
         .select("*")
         .eq("id", req.params.id)
         .single();
       if (subscriptionError) throw subscriptionError;
+      existingSubscription = subscription;
+    }
+
+    if (wantsRefund) {
+      const subscription = existingSubscription;
 
       const refundAmount = Number(subscription.jar_deposit || Number(subscription.jar_count || subscription.quantity || 1) * JAR_DEPOSIT);
       updates.deposit_refunded = true;
@@ -150,6 +160,23 @@ router.patch("/:id", async (req, res, next) => {
       .select()
       .single();
     if (error) throw error;
+
+    if (updates.status === "Active" && existingSubscription?.status !== "Active") {
+      const amount =
+        Number(existingSubscription?.jar_deposit || data.jar_deposit || 0) +
+        Number(existingSubscription?.water_charge_per_delivery || data.water_charge_per_delivery || 0);
+      if (amount > 0) {
+        const { error: paymentError } = await supabase.from("payments").insert({
+          user_id: data.user_id,
+          order_id: null,
+          amount,
+          method: "Subscription Checkout",
+          status: "Paid"
+        });
+        if (paymentError) throw paymentError;
+      }
+    }
+
     res.json(data);
   } catch (error) {
     next(error);

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
-import { getSession } from "../services/session";
+import { getOrCreateMockSession } from "../services/session";
 
 const frequencies = ["Daily", "Weekly", "Custom"];
 const JAR_DEPOSIT = 250;
@@ -25,7 +27,8 @@ function getNextDeliveryDate(subscription) {
   return formatDate(next);
 }
 
-export default function SubscriptionsScreen() {
+export default function SubscriptionsScreen({ navigation }) {
+  const { addSubscriptionToCart } = useCart();
   const [session, setSession] = useState(null);
   const [products, setProducts] = useState([]);
   const [addresses, setAddresses] = useState([]);
@@ -51,7 +54,7 @@ export default function SubscriptionsScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const storedSession = await getSession();
+      const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
       const productData = await api.getProducts();
       setProducts(productData);
@@ -60,10 +63,10 @@ export default function SubscriptionsScreen() {
       if (storedSession?.user?.id) {
         const [addressData, subscriptionData] = await Promise.all([
           api.getAddresses(storedSession.user.id),
-          api.getSubscriptions(storedSession.user.id)
+          api.getSubscriptions(storedSession.user.id, "Active")
         ]);
         setAddresses(addressData);
-        setSubscriptions(subscriptionData);
+        setSubscriptions(subscriptionData.filter((subscription) => subscription.status === "Active"));
       }
     } catch (error) {
       Alert.alert("Subscriptions", error.message);
@@ -76,35 +79,40 @@ export default function SubscriptionsScreen() {
     loadData();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
   const createSubscription = async () => {
-    if (!session?.user?.id) {
-      Alert.alert("Login required", "Please verify OTP before creating a subscription.");
-      return;
-    }
     if (!selectedProduct?.id) {
       Alert.alert("Choose product", "No product is available for subscription.");
-      return;
-    }
-    const address = addresses.find((item) => item.is_default) || addresses[0];
-    if (!address) {
-      Alert.alert("Address required", "Please add a delivery address before subscribing.");
       return;
     }
 
     setSaving(true);
     try {
-      await api.createSubscription({
-        user_id: session.user.id,
+      const activeSession = session?.user?.id ? session : await getOrCreateMockSession();
+      setSession(activeSession);
+      addSubscriptionToCart({
+        id: `subscription-${selectedProduct.id}-${frequency}-${formatDate(startDate)}-${jars}-${Date.now()}`,
+        name: `${selectedProduct.name} Subscription (${frequency}) x ${jars} jar${jars > 1 ? "s" : ""}`,
         product_id: selectedProduct.id,
-        address_id: address.id,
+        jar_count: jars,
         frequency,
         start_date: formatDate(startDate),
-        jar_count: jars
+        jar_deposit: jarDeposit,
+        water_charge_per_delivery: waterCharge,
+        total: startCost,
+        price: startCost,
+        image_url: selectedProduct.image_url,
+        user_id: activeSession.user.id,
       });
-      Alert.alert("Subscription created", `Start cost: ₹${startCost}`);
-      await loadData();
+      Alert.alert("Subscription added to cart", "Complete payment in Cart.");
+      navigation.navigate("Cart");
     } catch (error) {
-      Alert.alert("Subscription failed", error.message);
+      Alert.alert("Subscription cart failed", error.message);
     } finally {
       setSaving(false);
     }
@@ -228,7 +236,7 @@ export default function SubscriptionsScreen() {
           </View>
 
           <TouchableOpacity className="bg-primary rounded-lg py-4 items-center" onPress={createSubscription} disabled={saving}>
-            <Text className="text-white font-bold">{saving ? "Creating..." : "Create Subscription"}</Text>
+            <Text className="text-white font-bold">{saving ? "Adding..." : "Create Subscription"}</Text>
           </TouchableOpacity>
         </View>
 

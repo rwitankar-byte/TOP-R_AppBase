@@ -3,7 +3,7 @@ import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
-import { clearSession, getSession } from "../services/session";
+import { clearSession, getOrCreateMockSession } from "../services/session";
 
 const sections = [
   {
@@ -24,6 +24,15 @@ const sections = [
   }
 ];
 
+const routeMap = {
+  "All Orders": "AllOrders",
+  "Order Calendar": "OrderCalendar",
+  "Favorite Orders": "FavoriteOrders",
+  "Address Book": "AddressBook",
+  "Transaction History": "TransactionHistory",
+  "Return Empty Jar": "ReturnEmptyJar"
+};
+
 function Row({ label, onPress }) {
   return (
     <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100" onPress={onPress}>
@@ -37,7 +46,7 @@ export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    getSession().then(async (storedSession) => {
+    getOrCreateMockSession().then(async (storedSession) => {
       if (storedSession?.user?.id) {
         setProfile(await api.getUser(storedSession.user.id));
       }
@@ -73,7 +82,7 @@ export default function ProfileScreen({ navigation }) {
               <Row
                 key={item}
                 label={item}
-                onPress={item === "Transaction History" ? () => navigation.navigate("Payment") : undefined}
+                onPress={routeMap[item] ? () => navigation.navigate(routeMap[item]) : undefined}
               />
             ))}
           </View>

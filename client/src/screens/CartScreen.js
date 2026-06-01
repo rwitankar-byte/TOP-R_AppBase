@@ -1,53 +1,90 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
-import { getSession } from "../services/session";
+import { getOrCreateMockSession, getSelectedAddress } from "../services/session";
 
 export default function CartScreen({ navigation }) {
   const { items, updateQuantity, total, clearCart } = useCart();
   const [session, setSession] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [placing, setPlacing] = useState(false);
-  const address = addresses.find((item) => item.is_default) || addresses[0];
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const address = selectedAddress || addresses.find((item) => item.is_default) || addresses[0];
 
-  useEffect(() => {
-    getSession().then(async (storedSession) => {
+  const loadAddresses = useCallback(async () => {
+    try {
+      const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
+      const savedAddress = await getSelectedAddress();
+      setSelectedAddress(savedAddress);
       if (storedSession?.user?.id) {
         setAddresses(await api.getAddresses(storedSession.user.id));
       }
-    }).catch((error) => Alert.alert("Cart", error.message));
+    } catch (error) {
+      Alert.alert("Cart", error.message);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAddresses();
+    }, [loadAddresses])
+  );
 
   const placeOrder = async () => {
     if (!items.length) {
       Alert.alert("Cart is empty", "Add a product before placing an order.");
       return;
     }
-    if (!session?.user?.id || !address?.id) {
-      Alert.alert("Login and address required", "Please verify OTP and set a delivery address before ordering.");
+    const productItems = items.filter((item) => item.type !== "subscription");
+    const subscriptionItems = items.filter((item) => item.type === "subscription");
+
+    if (productItems.length && !address?.id) {
+      Alert.alert("Address required", "No delivery address was found for this user.");
       return;
     }
 
     setPlacing(true);
     try {
-      const order = await api.placeOrder({
-        user_id: session.user.id,
-        address_id: address.id,
-        total_amount: total,
-        items: items.map((item) => ({
-          product_id: item.id,
-          quantity: item.quantity,
-          unit_price: Number(item.price)
-        }))
-      });
+      let order = null;
+      if (productItems.length) {
+        order = await api.placeOrder({
+          user_id: session.user.id,
+          address_id: address.id,
+          total_amount: productItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+          items: productItems.map((item) => ({
+            product_id: item.id,
+            quantity: item.quantity,
+            unit_price: Number(item.price)
+          }))
+        });
+      }
+
+      for (const item of subscriptionItems) {
+        const subscription = await api.createSubscription({
+          user_id: session.user.id,
+          product_id: item.product_id,
+          address_id: address?.id,
+          frequency: item.frequency,
+          start_date: item.start_date,
+          jar_count: item.jar_count,
+          status: "Pending"
+        });
+        await api.updateSubscription(subscription.id, { status: "Active" });
+      }
+
       clearCart();
-      navigation.navigate("OrderTracking", { orderId: order.id });
+      if (order?.id) {
+        navigation.navigate("OrderTracking", { orderId: order.id });
+      } else {
+        navigation.navigate("Subscriptions");
+      }
     } catch (error) {
-      Alert.alert("Order failed", error.message);
+      Alert.alert("Checkout failed", error.message);
     } finally {
       setPlacing(false);
     }
@@ -57,7 +94,10 @@ export default function CartScreen({ navigation }) {
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
         <Text className="text-ink text-2xl font-extrabold my-4">Cart</Text>
-        <TouchableOpacity className="border border-gray-100 rounded-lg p-4 mb-4 flex-row items-center justify-between">
+        <TouchableOpacity
+          className="border border-gray-100 rounded-lg p-4 mb-4 flex-row items-center justify-between"
+          onPress={() => navigation.navigate("AddressBook", { selectMode: true })}
+        >
           <View>
             <Text className="text-xs text-muted">Delivery address</Text>
             <Text className="text-ink font-bold mt-1">{address ? `${address.label}, ${address.full_address}` : "No address found"}</Text>
@@ -67,19 +107,36 @@ export default function CartScreen({ navigation }) {
 
         {items.map((item) => (
           <View key={item.id} className="flex-row border border-gray-100 rounded-lg p-3 mb-3">
-            <Image source={{ uri: item.image_url }} className="w-20 h-20 rounded-md" />
+            {item.image_url ? (
+              <Image source={{ uri: item.image_url }} className="w-20 h-20 rounded-md" />
+            ) : (
+              <View className="w-20 h-20 rounded-md bg-wash items-center justify-center">
+                <Ionicons name={item.type === "subscription" ? "repeat" : "water"} size={28} color="#00B5B0" />
+              </View>
+            )}
             <View className="flex-1 ml-3">
               <Text className="font-bold text-ink">{item.name}</Text>
+              {item.type === "subscription" && (
+                <Text className="text-muted text-xs mt-1">
+                  Deposit ₹{item.jar_deposit} + delivery ₹{item.water_charge_per_delivery}
+                </Text>
+              )}
               <Text className="text-primary font-extrabold mt-1">₹{Number(item.price)}</Text>
-              <View className="flex-row items-center mt-3">
-                <TouchableOpacity className="bg-wash p-2 rounded-md" onPress={() => updateQuantity(item.id, item.quantity - 1)}>
-                  <Ionicons name="remove" size={18} color="#17252A" />
+              {item.type === "subscription" ? (
+                <TouchableOpacity className="bg-red-50 px-3 py-2 rounded-md mt-3 self-start" onPress={() => updateQuantity(item.id, 0)}>
+                  <Text className="text-red-500 font-bold">Remove</Text>
                 </TouchableOpacity>
-                <Text className="mx-4 font-bold">{item.quantity}</Text>
-                <TouchableOpacity className="bg-primary p-2 rounded-md" onPress={() => updateQuantity(item.id, item.quantity + 1)}>
-                  <Ionicons name="add" size={18} color="#fff" />
-                </TouchableOpacity>
-              </View>
+              ) : (
+                <View className="flex-row items-center mt-3">
+                  <TouchableOpacity className="bg-wash p-2 rounded-md" onPress={() => updateQuantity(item.id, item.quantity - 1)}>
+                    <Ionicons name="remove" size={18} color="#17252A" />
+                  </TouchableOpacity>
+                  <Text className="mx-4 font-bold">{item.quantity}</Text>
+                  <TouchableOpacity className="bg-primary p-2 rounded-md" onPress={() => updateQuantity(item.id, item.quantity + 1)}>
+                    <Ionicons name="add" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         ))}

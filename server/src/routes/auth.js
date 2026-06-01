@@ -2,6 +2,56 @@ import { Router } from "express";
 import { supabaseAdmin, supabaseAuth } from "../config/supabase.js";
 
 const router = Router();
+const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+const TEST_ADDRESS_ID = "00000000-0000-0000-0000-000000000101";
+
+export async function ensureTestUser() {
+  if (!supabaseAdmin) return null;
+
+  const { data: user, error: userError } = await supabaseAdmin
+    .from("users")
+    .upsert(
+      {
+        id: TEST_USER_ID,
+        phone: "+919999999999",
+        name: "Test User",
+        wallet_balance: 500
+      },
+      { onConflict: "id" }
+    )
+    .select()
+    .single();
+  if (userError) throw userError;
+
+  const { error: addressError } = await supabaseAdmin.from("addresses").upsert(
+    {
+      id: TEST_ADDRESS_ID,
+      user_id: TEST_USER_ID,
+      label: "Home",
+      full_address: "Test address, local development",
+      lat: 19.076,
+      lng: 72.8777,
+      is_default: true
+    },
+    { onConflict: "id" }
+  );
+  if (addressError) throw addressError;
+
+  return user;
+}
+
+ensureTestUser().catch((error) => {
+  console.error("Failed to seed test user", error.message);
+});
+
+router.post("/test-user", async (_req, res, next) => {
+  try {
+    const user = await ensureTestUser();
+    res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.post("/send-otp", async (req, res, next) => {
   try {

@@ -34,6 +34,7 @@ create table if not exists public.orders (
   user_id uuid not null references public.users(id) on delete cascade,
   address_id uuid references public.addresses(id) on delete set null,
   status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Out for Delivery', 'Delivered', 'Cancelled')),
+  order_type text not null default 'delivery' check (order_type in ('delivery', 'return')),
   total_amount numeric(10, 2) not null,
   delivery_date date,
   created_at timestamptz not null default now()
@@ -54,7 +55,7 @@ create table if not exists public.subscriptions (
   address_id uuid references public.addresses(id) on delete set null,
   frequency text not null check (frequency in ('Daily', 'Weekly', 'Custom')),
   start_date date not null,
-  status text not null default 'Active' check (status in ('Active', 'Paused', 'Cancelled')),
+  status text not null default 'Pending' check (status in ('Pending', 'Active', 'Paused', 'Cancelled')),
   quantity integer not null default 1 check (quantity > 0),
   jar_count integer not null default 1 check (jar_count > 0),
   jar_deposit numeric(10, 2) not null default 250,

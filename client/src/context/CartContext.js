@@ -13,8 +13,12 @@ export function CartProvider({ children }) {
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...current, { ...product, quantity: 1 }];
+      return [...current, { ...product, type: product.type || "product", quantity: 1 }];
     });
+  };
+
+  const addSubscriptionToCart = (subscription) => {
+    setItems((current) => [...current, { ...subscription, type: "subscription", quantity: 1 }]);
   };
 
   const updateQuantity = (id, quantity) => {
@@ -28,12 +32,12 @@ export function CartProvider({ children }) {
   const clearCart = () => setItems([]);
 
   const total = useMemo(
-    () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    () => items.reduce((sum, item) => sum + Number(item.price || 0) * item.quantity, 0),
     [items]
   );
 
   return (
-    <CartContext.Provider value={{ items, addToCart, updateQuantity, clearCart, total }}>
+    <CartContext.Provider value={{ items, addToCart, addSubscriptionToCart, updateQuantity, clearCart, total }}>
       {children}
     </CartContext.Provider>
   );

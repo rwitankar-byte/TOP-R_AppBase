@@ -13,6 +13,7 @@ import userRoutes from "./routes/users.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
+const host = "0.0.0.0";
 
 app.use(cors());
 app.use(express.json());
@@ -33,6 +34,6 @@ app.use((error, _req, res, _next) => {
   res.status(error.status || 500).json({ error: error.message || "Internal server error" });
 });
 
-app.listen(port, () => {
+app.listen(port, host, () => {
   console.log(`Server running on port ${port}`);
 });
