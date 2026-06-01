@@ -1,5 +1,5 @@
 import cors from "cors";
-import dotenv from "dotenv";
+import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
 import addressRoutes from "./routes/addresses.js";
@@ -9,8 +9,7 @@ import orderRoutes from "./routes/orders.js";
 import paymentRoutes from "./routes/payments.js";
 import productRoutes from "./routes/products.js";
 import subscriptionRoutes from "./routes/subscriptions.js";
-
-dotenv.config();
+import userRoutes from "./routes/users.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -27,6 +26,7 @@ app.use("/subscriptions", subscriptionRoutes);
 app.use("/inventory", inventoryRoutes);
 app.use("/payments", paymentRoutes);
 app.use("/addresses", addressRoutes);
+app.use("/users", userRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);
@@ -34,5 +34,5 @@ app.use((error, _req, res, _next) => {
 });
 
 app.listen(port, () => {
-  console.log(`Water app API running on http://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
 });

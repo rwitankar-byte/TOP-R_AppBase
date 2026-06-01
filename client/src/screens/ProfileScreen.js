@@ -1,6 +1,9 @@
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../services/api";
+import { clearSession, getSession } from "../services/session";
 
 const sections = [
   {
@@ -31,6 +34,21 @@ function Row({ label, onPress }) {
 }
 
 export default function ProfileScreen({ navigation }) {
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    getSession().then(async (storedSession) => {
+      if (storedSession?.user?.id) {
+        setProfile(await api.getUser(storedSession.user.id));
+      }
+    }).catch((error) => Alert.alert("Profile", error.message));
+  }, []);
+
+  const logout = async () => {
+    await clearSession();
+    navigation.replace("Auth");
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
@@ -39,13 +57,13 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="person" size={34} color="#fff" />
           </View>
           <View className="ml-4">
-            <Text className="text-ink text-xl font-extrabold">+91 98765 43210</Text>
-            <Text className="text-muted">Customer account</Text>
+            <Text className="text-ink text-xl font-extrabold">{profile?.phone || "Not logged in"}</Text>
+            <Text className="text-muted">{profile?.name || "Customer account"}</Text>
           </View>
         </View>
 
         <Row label="View Profile Details" />
-        <Row label="Wallet (₹250 balance)" onPress={() => navigation.navigate("Payment")} />
+        <Row label={`Wallet (₹${Number(profile?.wallet_balance || 0)} balance)`} onPress={() => navigation.navigate("Payment")} />
         <Row label="Bank Details" />
 
         {sections.map((section) => (
@@ -61,7 +79,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
         ))}
 
-        <TouchableOpacity className="bg-red-50 rounded-lg py-4 items-center my-8" onPress={() => navigation.replace("Auth")}>
+        <TouchableOpacity className="bg-red-50 rounded-lg py-4 items-center my-8" onPress={logout}>
           <Text className="text-red-500 font-extrabold">Logout</Text>
         </TouchableOpacity>
       </ScrollView>

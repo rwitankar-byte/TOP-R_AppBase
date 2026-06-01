@@ -27,10 +27,33 @@ router.post("/verify-otp", async (req, res, next) => {
     if (error) throw error;
 
     if (data.user && supabaseAdmin) {
-      const { error: profileError } = await supabaseAdmin
+      const userProfile = { id: data.user.id, phone: data.user.phone || phone };
+      const { data: profile, error: profileError } = await supabaseAdmin
         .from("users")
-        .upsert({ id: data.user.id, phone: data.user.phone || phone }, { onConflict: "id" });
+        .upsert(userProfile, { onConflict: "id" })
+        .select()
+        .single();
       if (profileError) throw profileError;
+
+      const { data: existingAddress, error: addressLookupError } = await supabaseAdmin
+        .from("addresses")
+        .select("id")
+        .eq("user_id", data.user.id)
+        .eq("is_default", true)
+        .maybeSingle();
+      if (addressLookupError) throw addressLookupError;
+
+      if (!existingAddress) {
+        const { error: addressError } = await supabaseAdmin.from("addresses").insert({
+          user_id: data.user.id,
+          label: "Home",
+          full_address: "Default delivery address",
+          is_default: true
+        });
+        if (addressError) throw addressError;
+      }
+
+      return res.json({ ...data, profile });
     }
 
     res.json(data);

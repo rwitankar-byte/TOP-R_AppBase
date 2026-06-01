@@ -11,14 +11,25 @@ router.post("/", async (req, res, next) => {
     }
 
     const supabase = requireSupabase();
+    const normalizedItems = items.map((item) => ({
+      product_id: item.product_id || item.id,
+      quantity: Number(item.quantity || 0),
+      unit_price: Number(item.unit_price ?? item.price ?? 0)
+    }));
+
+    if (normalizedItems.some((item) => !item.product_id || item.quantity <= 0 || item.unit_price <= 0)) {
+      return res.status(400).json({ error: "Each item requires product_id, quantity, and unit_price" });
+    }
+
+    const computedTotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .insert({ user_id, address_id, total_amount, delivery_date, status: "Placed" })
+      .insert({ user_id, address_id, total_amount: total_amount ?? computedTotal, delivery_date, status: "Placed" })
       .select()
       .single();
     if (orderError) throw orderError;
 
-    const orderItems = items.map((item) => ({
+    const orderItems = normalizedItems.map((item) => ({
       order_id: order.id,
       product_id: item.product_id,
       quantity: item.quantity,
@@ -26,6 +37,23 @@ router.post("/", async (req, res, next) => {
     }));
     const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
     if (itemsError) throw itemsError;
+
+    for (const item of normalizedItems) {
+      const { data: inventory, error: inventoryError } = await supabase
+        .from("inventory")
+        .select("id, quantity_available")
+        .eq("product_id", item.product_id)
+        .maybeSingle();
+      if (inventoryError) throw inventoryError;
+      if (inventory) {
+        const nextQuantity = Math.max(Number(inventory.quantity_available) - item.quantity, 0);
+        const { error: updateError } = await supabase
+          .from("inventory")
+          .update({ quantity_available: nextQuantity, last_updated: new Date().toISOString() })
+          .eq("id", inventory.id);
+        if (updateError) throw updateError;
+      }
+    }
 
     res.status(201).json({ ...order, items: orderItems });
   } catch (error) {

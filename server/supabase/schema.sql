@@ -55,7 +55,11 @@ create table if not exists public.subscriptions (
   frequency text not null check (frequency in ('Daily', 'Weekly', 'Custom')),
   start_date date not null,
   status text not null default 'Active' check (status in ('Active', 'Paused', 'Cancelled')),
-  quantity integer not null default 1 check (quantity > 0)
+  quantity integer not null default 1 check (quantity > 0),
+  jar_count integer not null default 1 check (jar_count > 0),
+  jar_deposit numeric(10, 2) not null default 250,
+  water_charge_per_delivery numeric(10, 2) not null default 40,
+  deposit_refunded boolean not null default false
 );
 
 create table if not exists public.inventory (

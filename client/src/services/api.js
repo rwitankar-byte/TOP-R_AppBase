@@ -6,7 +6,7 @@ async function request(path, options = {}) {
     ...options
   });
 
-  const payload = await response.json().catch(() => null);
+  const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(payload?.error || "Request failed");
   }
@@ -18,7 +18,15 @@ export const api = {
   verifyOtp: (phone, token) =>
     request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ phone, token }) }),
   getProducts: () => request("/products"),
+  getUser: (userId) => request(`/users/${userId}`),
+  getAddresses: (userId) => request(`/addresses/${userId}`),
   placeOrder: (order) => request("/orders", { method: "POST", body: JSON.stringify(order) }),
+  getOrders: (userId) => request(`/orders/${userId}`),
+  getSubscriptions: (userId) => request(`/subscriptions/${userId}`),
+  createSubscription: (subscription) =>
+    request("/subscriptions", { method: "POST", body: JSON.stringify(subscription) }),
+  updateSubscription: (id, updates) =>
+    request(`/subscriptions/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
   getPayments: (userId) => request(`/payments/${userId}`),
   getDue: (userId) => request(`/payments/due/${userId}`)
 };

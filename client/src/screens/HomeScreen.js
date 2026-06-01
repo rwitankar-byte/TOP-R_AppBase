@@ -1,11 +1,31 @@
-import { FlatList, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, FlatList, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ProductCard from "../components/ProductCard";
-import { banners, categories, products } from "../data/products";
+import { banners, categories, products as fallbackProducts } from "../data/products";
+import { api } from "../services/api";
 
 export default function HomeScreen({ navigation }) {
-  const popular = products.filter((product) => product.isPopular);
+  const [products, setProducts] = useState([]);
+  const [locationLabel, setLocationLabel] = useState("Finding location...");
+  const popular = (products.length ? products : fallbackProducts).slice(0, 4);
+
+  useEffect(() => {
+    api.getProducts().then(setProducts).catch((error) => Alert.alert("Products", error.message));
+
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setLocationLabel("Location permission needed");
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({});
+      const [place] = await Location.reverseGeocodeAsync(current.coords);
+      setLocationLabel([place?.city || place?.district, place?.subregion || place?.region].filter(Boolean).join(", ") || "Current location");
+    })().catch(() => setLocationLabel("Current location unavailable"));
+  }, []);
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -15,7 +35,7 @@ export default function HomeScreen({ navigation }) {
             <Ionicons name="location" color="#00B5B0" size={22} />
             <View className="ml-2">
               <Text className="text-xs text-muted">Deliver to</Text>
-              <Text className="font-bold text-ink">Mumbai, Andheri West</Text>
+              <Text className="font-bold text-ink">{locationLabel}</Text>
             </View>
           </View>
           <Ionicons name="chevron-down" color="#17252A" size={20} />

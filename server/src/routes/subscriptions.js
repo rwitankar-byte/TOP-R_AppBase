@@ -2,16 +2,70 @@ import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
 
 const router = Router();
+const JAR_DEPOSIT = 250;
+const WATER_CHARGE = 40;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 router.post("/", async (req, res, next) => {
   try {
-    const { user_id, product_id, address_id, frequency, start_date, quantity = 1 } = req.body;
-    if (!user_id || !product_id || !address_id || !frequency || !start_date) {
-      return res.status(400).json({ error: "user_id, product_id, address_id, frequency, and start_date are required" });
+    const { user_id, product_id, address_id, frequency, start_date, quantity, jar_count } = req.body;
+    if (!user_id || !product_id || !frequency || !start_date) {
+      return res.status(400).json({ error: "user_id, product_id, frequency, and start_date are required" });
     }
-    const { data, error } = await requireSupabase()
+
+    const supabase = requireSupabase();
+    const jars = Math.max(1, Number(jar_count ?? quantity ?? 1));
+    const jarDeposit = jars * JAR_DEPOSIT;
+    const waterCharge = jars * WATER_CHARGE;
+
+    let resolvedAddressId = address_id || null;
+    if (!resolvedAddressId) {
+      if (UUID_PATTERN.test(user_id)) {
+        const { data: defaultAddress, error: addressError } = await supabase
+          .from("addresses")
+          .select("id")
+          .eq("user_id", user_id)
+          .eq("is_default", true)
+          .maybeSingle();
+        if (addressError) throw addressError;
+        resolvedAddressId = defaultAddress?.id || null;
+      }
+    }
+
+    if (!UUID_PATTERN.test(user_id)) {
+      return res.status(201).json({
+        id: "mock-subscription",
+        user_id,
+        product_id,
+        address_id: resolvedAddressId,
+        frequency,
+        start_date,
+        status: "Active",
+        quantity: jars,
+        jar_count: jars,
+        jar_deposit: jarDeposit,
+        water_charge_per_delivery: waterCharge,
+        deposit_refunded: false,
+        mode: "mock",
+        message: "Mock subscription created because user_id is not a valid UUID"
+      });
+    }
+
+    const { data, error } = await supabase
       .from("subscriptions")
-      .insert({ user_id, product_id, address_id, frequency, start_date, quantity, status: "Active" })
+      .insert({
+        user_id,
+        product_id,
+        address_id: resolvedAddressId,
+        frequency,
+        start_date,
+        quantity: jars,
+        jar_count: jars,
+        jar_deposit: jarDeposit,
+        water_charge_per_delivery: waterCharge,
+        deposit_refunded: false,
+        status: "Active"
+      })
       .select()
       .single();
     if (error) throw error;
@@ -37,9 +91,59 @@ router.get("/:userId", async (req, res, next) => {
 
 router.patch("/:id", async (req, res, next) => {
   try {
-    const allowed = ["frequency", "start_date", "status", "quantity", "address_id"];
+    const supabase = requireSupabase();
+    const allowed = ["frequency", "start_date", "status", "quantity", "address_id", "jar_count"];
     const updates = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
-    const { data, error } = await requireSupabase()
+
+    if (updates.jar_count !== undefined) {
+      const jars = Math.max(1, Number(updates.jar_count));
+      updates.jar_count = jars;
+      updates.quantity = jars;
+      updates.jar_deposit = jars * JAR_DEPOSIT;
+      updates.water_charge_per_delivery = jars * WATER_CHARGE;
+    }
+
+    const wantsRefund =
+      updates.status === "Cancelled" &&
+      (req.body.jars_returned === true || req.body.return_jars === true || req.body.confirm_return === true);
+
+    if (wantsRefund) {
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("id", req.params.id)
+        .single();
+      if (subscriptionError) throw subscriptionError;
+
+      const refundAmount = Number(subscription.jar_deposit || Number(subscription.jar_count || subscription.quantity || 1) * JAR_DEPOSIT);
+      updates.deposit_refunded = true;
+
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("wallet_balance")
+        .eq("id", subscription.user_id)
+        .single();
+      if (userError) throw userError;
+
+      if (!subscription.deposit_refunded && refundAmount > 0) {
+        const walletBalance = Number(user.wallet_balance || 0) + refundAmount;
+        const { error: walletError } = await supabase
+          .from("users")
+          .update({ wallet_balance: walletBalance })
+          .eq("id", subscription.user_id);
+        if (walletError) throw walletError;
+
+        const { error: transactionError } = await supabase.from("transactions").insert({
+          user_id: subscription.user_id,
+          type: "Wallet Refund",
+          amount: refundAmount,
+          description: `Refunded jar deposit for ${subscription.jar_count || subscription.quantity || 1} returned jar(s)`
+        });
+        if (transactionError) throw transactionError;
+      }
+    }
+
+    const { data, error } = await supabase
       .from("subscriptions")
       .update(updates)
       .eq("id", req.params.id)

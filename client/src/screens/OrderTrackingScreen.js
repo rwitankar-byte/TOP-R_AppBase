@@ -1,15 +1,29 @@
-import { ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../services/api";
+import { getSession } from "../services/session";
 
 const steps = ["Placed", "Confirmed", "Out for Delivery", "Delivered"];
-const currentIndex = 2;
 
 export default function OrderTrackingScreen({ route }) {
+  const [order, setOrder] = useState(null);
+  const currentIndex = useMemo(() => Math.max(0, steps.indexOf(order?.status || "Placed")), [order?.status]);
+
+  useEffect(() => {
+    getSession().then(async (storedSession) => {
+      if (!storedSession?.user?.id) return;
+      const orders = await api.getOrders(storedSession.user.id);
+      const selected = orders.find((item) => item.id === route.params?.orderId) || orders[0];
+      setOrder(selected);
+    }).catch((error) => Alert.alert("Order tracking", error.message));
+  }, [route.params?.orderId]);
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
-        <Text className="text-ink text-2xl font-extrabold my-4">Order {route.params?.orderId || "ORD-1024"}</Text>
+        <Text className="text-ink text-2xl font-extrabold my-4">Order {order?.id || route.params?.orderId || "Latest"}</Text>
         <View className="border border-gray-100 rounded-lg p-4 mb-5">
           {steps.map((step, index) => {
             const done = index <= currentIndex;

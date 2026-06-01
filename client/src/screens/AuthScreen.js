@@ -1,30 +1,48 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
+import { getSession, saveSession } from "../services/session";
 
 export default function AuthScreen({ navigation }) {
   const [phone, setPhone] = useState("+91");
   const [token, setToken] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getSession().then((storedSession) => {
+      if (storedSession?.user?.id) navigation.replace("MainTabs");
+    });
+  }, [navigation]);
 
   const sendOtp = async () => {
+    setLoading(true);
     try {
       await api.sendOtp(phone);
       setOtpSent(true);
     } catch (error) {
-      Alert.alert("OTP placeholder", "Server not connected yet. Continue with demo mode.");
-      setOtpSent(true);
+      Alert.alert("OTP failed", error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const verifyOtp = async () => {
-    try {
-      if (token) await api.verifyOtp(phone, token);
-    } catch (error) {
-      // Demo mode still lets the scaffolded app be explored.
+    if (!token) {
+      Alert.alert("OTP required", "Enter the OTP sent to your phone.");
+      return;
     }
-    navigation.replace("MainTabs");
+    setLoading(true);
+    try {
+      const authSession = await api.verifyOtp(phone, token);
+      await saveSession(authSession);
+      navigation.replace("MainTabs");
+    } catch (error) {
+      Alert.alert("Verification failed", error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -48,7 +66,7 @@ export default function AuthScreen({ navigation }) {
         />
       )}
       <TouchableOpacity className="bg-primary rounded-lg py-4 items-center" onPress={otpSent ? verifyOtp : sendOtp}>
-        <Text className="text-white font-bold text-base">{otpSent ? "Verify OTP" : "Send OTP"}</Text>
+        <Text className="text-white font-bold text-base">{loading ? "Please wait..." : otpSent ? "Verify OTP" : "Send OTP"}</Text>
       </TouchableOpacity>
       <TouchableOpacity className="items-center mt-4" onPress={() => navigation.replace("MainTabs")}>
         <Text className="text-primary font-bold">Explore demo app</Text>

@@ -17,7 +17,7 @@ export default function ProductCard({ product, compact = false }) {
         </Text>
         <View className="flex-row items-center justify-between mt-3">
           <View>
-            <Text className="text-primary font-extrabold text-lg">₹{product.price}</Text>
+            <Text className="text-primary font-extrabold text-lg">₹{Number(product.price)}</Text>
             <Text className="text-muted text-xs">{product.unit}</Text>
           </View>
           <TouchableOpacity

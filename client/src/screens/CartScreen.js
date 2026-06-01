@@ -1,18 +1,56 @@
+import { useEffect, useState } from "react";
 import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
+import { api } from "../services/api";
+import { getSession } from "../services/session";
 
 export default function CartScreen({ navigation }) {
   const { items, updateQuantity, total, clearCart } = useCart();
+  const [session, setSession] = useState(null);
+  const [addresses, setAddresses] = useState([]);
+  const [placing, setPlacing] = useState(false);
+  const address = addresses.find((item) => item.is_default) || addresses[0];
 
-  const placeOrder = () => {
+  useEffect(() => {
+    getSession().then(async (storedSession) => {
+      setSession(storedSession);
+      if (storedSession?.user?.id) {
+        setAddresses(await api.getAddresses(storedSession.user.id));
+      }
+    }).catch((error) => Alert.alert("Cart", error.message));
+  }, []);
+
+  const placeOrder = async () => {
     if (!items.length) {
       Alert.alert("Cart is empty", "Add a product before placing an order.");
       return;
     }
-    clearCart();
-    navigation.navigate("OrderTracking", { orderId: "ORD-1024" });
+    if (!session?.user?.id || !address?.id) {
+      Alert.alert("Login and address required", "Please verify OTP and set a delivery address before ordering.");
+      return;
+    }
+
+    setPlacing(true);
+    try {
+      const order = await api.placeOrder({
+        user_id: session.user.id,
+        address_id: address.id,
+        total_amount: total,
+        items: items.map((item) => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          unit_price: Number(item.price)
+        }))
+      });
+      clearCart();
+      navigation.navigate("OrderTracking", { orderId: order.id });
+    } catch (error) {
+      Alert.alert("Order failed", error.message);
+    } finally {
+      setPlacing(false);
+    }
   };
 
   return (
@@ -22,7 +60,7 @@ export default function CartScreen({ navigation }) {
         <TouchableOpacity className="border border-gray-100 rounded-lg p-4 mb-4 flex-row items-center justify-between">
           <View>
             <Text className="text-xs text-muted">Delivery address</Text>
-            <Text className="text-ink font-bold mt-1">Home, Andheri West, Mumbai</Text>
+            <Text className="text-ink font-bold mt-1">{address ? `${address.label}, ${address.full_address}` : "No address found"}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#17252A" />
         </TouchableOpacity>
@@ -32,7 +70,7 @@ export default function CartScreen({ navigation }) {
             <Image source={{ uri: item.image_url }} className="w-20 h-20 rounded-md" />
             <View className="flex-1 ml-3">
               <Text className="font-bold text-ink">{item.name}</Text>
-              <Text className="text-primary font-extrabold mt-1">₹{item.price}</Text>
+              <Text className="text-primary font-extrabold mt-1">₹{Number(item.price)}</Text>
               <View className="flex-row items-center mt-3">
                 <TouchableOpacity className="bg-wash p-2 rounded-md" onPress={() => updateQuantity(item.id, item.quantity - 1)}>
                   <Ionicons name="remove" size={18} color="#17252A" />
@@ -60,7 +98,7 @@ export default function CartScreen({ navigation }) {
             <Text className="text-primary text-lg font-extrabold">₹{total}</Text>
           </View>
           <TouchableOpacity className="bg-primary rounded-lg py-4 items-center mb-4" onPress={placeOrder}>
-            <Text className="text-white font-bold text-base">Place Order</Text>
+            <Text className="text-white font-bold text-base">{placing ? "Placing..." : "Place Order"}</Text>
           </TouchableOpacity>
           <TouchableOpacity className="items-center mb-8" onPress={() => navigation.navigate("Payment")}>
             <Text className="text-primary font-bold">Go to payments</Text>
