@@ -1,4 +1,4 @@
-const API_URL = process.env.EXPO_PUBLIC_CLIENT_API_URL || "http://192.168.29.179:4000";
+const API_URL = process.env.EXPO_PUBLIC_CLIENT_API_URL || "https://top-rappbase-production.up.railway.app";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
