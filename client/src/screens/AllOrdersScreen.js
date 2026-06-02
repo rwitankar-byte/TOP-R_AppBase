@@ -42,7 +42,15 @@ export default function AllOrdersScreen({ navigation }) {
                 {order.status}
               </Text>
             </View>
-            <Text className="text-muted mt-2">{new Date(order.created_at).toLocaleDateString()}</Text>
+            <Text className="text-muted mt-2">
+              {new Date(order.created_at).toLocaleString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+              })}
+            </Text>
             <Text className="text-primary font-extrabold mt-2">₹{Number(order.total_amount || 0)}</Text>
           </TouchableOpacity>
         ))}

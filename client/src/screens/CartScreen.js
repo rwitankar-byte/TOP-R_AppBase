@@ -69,11 +69,7 @@ export default function CartScreen({ navigation }) {
     }
 
     clearCart();
-    if (order?.id) {
-      navigation.navigate("OrderTracking", { orderId: order.id });
-    } else {
-      navigation.navigate("Subscriptions");
-    }
+    navigation.navigate("AllOrders");
   };
 
   const placeOrder = async () => {

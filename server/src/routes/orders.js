@@ -5,6 +5,7 @@ const router = Router();
 
 router.post("/", async (req, res, next) => {
   try {
+    console.log("POST /orders body:", JSON.stringify(req.body));
     const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id } = req.body;
     const orderType = type === "return" ? "return" : "delivery";
     if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
@@ -23,10 +24,12 @@ router.post("/", async (req, res, next) => {
     }
 
     const computedTotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+    const requestedTotal = Number(total_amount);
+    const orderTotal = Number.isFinite(requestedTotal) && requestedTotal > 0 ? requestedTotal : computedTotal;
     const orderPayload = {
       user_id,
       address_id: address_id || null,
-      total_amount: total_amount ?? computedTotal,
+      total_amount: orderTotal,
       delivery_date,
       status: "Placed",
       order_type: orderType

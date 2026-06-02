@@ -34,7 +34,7 @@ export default function SubscriptionsScreen({ navigation }) {
   const [addresses, setAddresses] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [jarCount, setJarCount] = useState("1");
+  const [jarCount, setJarCount] = useState(1);
   const [frequency, setFrequency] = useState("Weekly");
   const [startDate, setStartDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -172,9 +172,9 @@ export default function SubscriptionsScreen({ navigation }) {
           <Text className="text-muted text-xs mb-2">Number of jars</Text>
           <TextInput
             className="border border-gray-200 rounded-lg px-4 py-3 text-base mb-4"
-            keyboardType="number-pad"
-            value={jarCount}
-            onChangeText={setJarCount}
+            keyboardType="numeric"
+            value={String(jarCount)}
+            onChangeText={(v) => setJarCount(Number(v.replace(/[^0-9]/g, "")) || 1)}
           />
 
           <Text className="text-muted text-xs mb-2">Frequency</Text>
