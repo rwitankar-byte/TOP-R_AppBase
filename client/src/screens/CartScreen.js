@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import RazorpayCheckout from 'react-native-razorpay';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
@@ -35,56 +36,122 @@ export default function CartScreen({ navigation }) {
     }, [loadAddresses])
   );
 
+  const completeCheckout = async (payment) => {
+    const productItems = items.filter((item) => item.type !== "subscription");
+    const subscriptionItems = items.filter((item) => item.type === "subscription");
+
+    let order = null;
+    if (productItems.length) {
+      order = await api.placeOrder({
+        user_id: session.user.id,
+        address_id: address.id,
+        payment_id: payment?.id,
+        total_amount: productItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+        items: productItems.map((item) => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          unit_price: Number(item.price)
+        }))
+      });
+    }
+
+    for (const item of subscriptionItems) {
+      const subscription = await api.createSubscription({
+        user_id: session.user.id,
+        product_id: item.product_id,
+        address_id: address?.id,
+        frequency: item.frequency,
+        start_date: item.start_date,
+        jar_count: item.jar_count,
+        status: "Pending"
+      });
+      await api.updateSubscription(subscription.id, { status: "Active" });
+    }
+
+    clearCart();
+    if (order?.id) {
+      navigation.navigate("OrderTracking", { orderId: order.id });
+    } else {
+      navigation.navigate("Subscriptions");
+    }
+  };
+
   const placeOrder = async () => {
     if (!items.length) {
       Alert.alert("Cart is empty", "Add a product before placing an order.");
       return;
     }
-    const productItems = items.filter((item) => item.type !== "subscription");
-    const subscriptionItems = items.filter((item) => item.type === "subscription");
 
+    const productItems = items.filter((item) => item.type !== "subscription");
     if (productItems.length && !address?.id) {
       Alert.alert("Address required", "No delivery address was found for this user.");
       return;
     }
 
+    if (!session?.user?.id) {
+      Alert.alert("Session required", "Please continue as guest or login before checkout.");
+      return;
+    }
+
     setPlacing(true);
     try {
-      let order = null;
-      if (productItems.length) {
-        order = await api.placeOrder({
-          user_id: session.user.id,
-          address_id: address.id,
-          total_amount: productItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
-          items: productItems.map((item) => ({
-            product_id: item.id,
-            quantity: item.quantity,
-            unit_price: Number(item.price)
-          }))
+      const totalInPaise = Math.round(Number(total) * 100);
+      console.log("Creating Razorpay order with amount in paise:", totalInPaise);
+      const paymentOrder = await api.createRazorpayOrder({
+        user_id: session.user.id,
+        amount: totalInPaise,
+        currency: "INR",
+        receipt: `cart_${Date.now()}`
+      });
+      console.log("Razorpay create-order response:", JSON.stringify(paymentOrder));
+
+      const userPhone = session.user.phone || session.profile?.phone;
+      const userName = session.profile?.name;
+      const contact = userPhone ? userPhone.replace(/\D/g, "") : "9999999999";
+      const options = {
+        description: "Water jar order",
+        image: "",
+        currency: "INR",
+        key: "rzp_test_Swk6ZXYsiWvhNK",
+        amount: String(totalInPaise),
+        order_id: paymentOrder.razorpay_order_id,
+        name: "TOP-R Water",
+        prefill: {
+          contact,
+          name: userName || "Customer"
+        },
+        theme: { color: "#00B5B0" }
+      };
+
+      console.log("Opening Razorpay checkout with options:", JSON.stringify(options));
+      const razorpayResult = await RazorpayCheckout.open(options)
+        .then((data) => {
+          console.log("Razorpay success:", JSON.stringify(data));
+          return data;
+        })
+        .catch((error) => {
+          console.log("Razorpay error:", JSON.stringify(error));
+          Alert.alert("Payment failed", error.description || "Try again.");
+          error.razorpayAlertShown = true;
+          throw error;
         });
+      console.log("Razorpay checkout closed after success:", JSON.stringify(razorpayResult));
+
+      const verified = await api.verifyRazorpayPayment({
+        razorpay_order_id: razorpayResult.razorpay_order_id,
+        razorpay_payment_id: razorpayResult.razorpay_payment_id,
+        razorpay_signature: razorpayResult.razorpay_signature
+      });
+
+      if (!verified.success) {
+        throw new Error("Payment verification failed");
       }
 
-      for (const item of subscriptionItems) {
-        const subscription = await api.createSubscription({
-          user_id: session.user.id,
-          product_id: item.product_id,
-          address_id: address?.id,
-          frequency: item.frequency,
-          start_date: item.start_date,
-          jar_count: item.jar_count,
-          status: "Pending"
-        });
-        await api.updateSubscription(subscription.id, { status: "Active" });
-      }
-
-      clearCart();
-      if (order?.id) {
-        navigation.navigate("OrderTracking", { orderId: order.id });
-      } else {
-        navigation.navigate("Subscriptions");
-      }
+      await completeCheckout(verified.payment);
     } catch (error) {
-      Alert.alert("Checkout failed", error.message);
+      if (error?.razorpayAlertShown) return;
+      const message = error?.description || error?.message || "";
+      Alert.alert(message.includes("cancel") ? "Payment cancelled" : "Payment failed", "Payment failed. Try again.");
     } finally {
       setPlacing(false);
     }
@@ -154,8 +221,8 @@ export default function CartScreen({ navigation }) {
             <Text className="text-ink text-lg font-extrabold">Total amount</Text>
             <Text className="text-primary text-lg font-extrabold">₹{total}</Text>
           </View>
-          <TouchableOpacity className="bg-primary rounded-lg py-4 items-center mb-4" onPress={placeOrder}>
-            <Text className="text-white font-bold text-base">{placing ? "Placing..." : "Place Order"}</Text>
+          <TouchableOpacity className="bg-primary rounded-lg py-4 items-center mb-4" onPress={placeOrder} disabled={placing}>
+            <Text className="text-white font-bold text-base">{placing ? "Processing..." : "Pay & Place Order"}</Text>
           </TouchableOpacity>
           <TouchableOpacity className="items-center mb-8" onPress={() => navigation.navigate("Payment")}>
             <Text className="text-primary font-bold">Go to payments</Text>

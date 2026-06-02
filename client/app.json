@@ -4,6 +4,7 @@
     "slug": "top-r-water",
     "version": "1.0.0",
     "orientation": "portrait",
+    "newArchEnabled": false,
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#00B5B0",
@@ -15,11 +16,18 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {},
+    "android": {
+      "package": "com.topr.water"
+    },
     "plugins": [
       "expo-asset",
       "expo-font",
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e413702c-f447-4e02-9fe2-9f5b16a420d7"
+      }
+    }
   }
 }

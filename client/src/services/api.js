@@ -31,5 +31,9 @@ export const api = {
   updateSubscription: (id, updates) =>
     request(`/subscriptions/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
   getPayments: (userId) => request(`/payments/${userId}`),
-  getDue: (userId) => request(`/payments/due/${userId}`)
+  getDue: (userId) => request(`/payments/due/${userId}`),
+  createRazorpayOrder: (payment) =>
+    request("/payments/create-order", { method: "POST", body: JSON.stringify(payment) }),
+  verifyRazorpayPayment: (payment) =>
+    request("/payments/verify", { method: "POST", body: JSON.stringify(payment) })
 };

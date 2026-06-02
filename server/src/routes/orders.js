@@ -5,7 +5,7 @@ const router = Router();
 
 router.post("/", async (req, res, next) => {
   try {
-    const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery" } = req.body;
+    const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id } = req.body;
     const orderType = type === "return" ? "return" : "delivery";
     if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
       return res.status(400).json({ error: "user_id, address_id, and items are required" });
@@ -69,6 +69,15 @@ router.post("/", async (req, res, next) => {
           .eq("id", inventory.id);
         if (updateError) throw updateError;
       }
+    }
+
+    if (payment_id) {
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .update({ order_id: order.id })
+        .eq("id", payment_id)
+        .eq("user_id", user_id);
+      if (paymentError) throw paymentError;
     }
 
     res.status(201).json({ ...order, items: orderItems });
