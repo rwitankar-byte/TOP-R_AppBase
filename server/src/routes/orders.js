@@ -24,8 +24,7 @@ router.post("/", async (req, res, next) => {
     }
 
     const computedTotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-    const requestedTotal = Number(total_amount);
-    const orderTotal = Number.isFinite(requestedTotal) && requestedTotal > 0 ? requestedTotal : computedTotal;
+    const orderTotal = parseFloat(req.body.total_amount) || computedTotal;
     const orderPayload = {
       user_id,
       address_id: address_id || null,
@@ -46,6 +45,7 @@ router.post("/", async (req, res, next) => {
       orderError = fallback.error;
     }
     if (orderError) throw orderError;
+    console.log("POST /orders saved order:", JSON.stringify(order));
 
     const orderItems = normalizedItems.map((item) => ({
       order_id: order.id,

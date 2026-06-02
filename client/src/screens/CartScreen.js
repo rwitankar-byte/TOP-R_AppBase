@@ -42,17 +42,19 @@ export default function CartScreen({ navigation }) {
 
     let order = null;
     if (productItems.length) {
-      order = await api.placeOrder({
+      const orderBody = {
         user_id: session.user.id,
         address_id: address.id,
         payment_id: payment?.id,
-        total_amount: productItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+        total_amount: Number(total),
         items: productItems.map((item) => ({
           product_id: item.id,
           quantity: item.quantity,
           unit_price: Number(item.price)
         }))
-      });
+      };
+      console.log("POST /orders request body:", JSON.stringify(orderBody));
+      order = await api.placeOrder(orderBody);
     }
 
     for (const item of subscriptionItems) {
