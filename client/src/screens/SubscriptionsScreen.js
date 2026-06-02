@@ -170,12 +170,21 @@ export default function SubscriptionsScreen({ navigation }) {
           </ScrollView>
 
           <Text className="text-muted text-xs mb-2">Number of jars</Text>
-          <TextInput
-            className="border border-gray-200 rounded-lg px-4 py-3 text-base mb-4"
-            keyboardType="numeric"
-            value={String(jarCount)}
-            onChangeText={(v) => setJarCount(Number(v.replace(/[^0-9]/g, "")) || 1)}
-          />
+          <View className="flex-row items-center self-start border border-primary rounded-lg mb-4 overflow-hidden">
+            <TouchableOpacity
+              className="w-10 h-10 bg-primary items-center justify-center"
+              onPress={() => setJarCount((prev) => Math.max(1, prev - 1))}
+            >
+              <Text className="text-white text-xl font-extrabold">-</Text>
+            </TouchableOpacity>
+            <Text className="min-w-[60px] text-center text-primary text-xl font-extrabold">{jarCount}</Text>
+            <TouchableOpacity
+              className="w-10 h-10 bg-primary items-center justify-center"
+              onPress={() => setJarCount((prev) => prev + 1)}
+            >
+              <Text className="text-white text-xl font-extrabold">+</Text>
+            </TouchableOpacity>
+          </View>
 
           <Text className="text-muted text-xs mb-2">Frequency</Text>
           <View className="flex-row mb-4">
