@@ -13,6 +13,7 @@ import InventoryScreen from "./src/screens/InventoryScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import OrderDetailScreen from "./src/screens/OrderDetailScreen";
 import OrdersScreen from "./src/screens/OrdersScreen";
+import ReturnRequestsScreen from "./src/screens/ReturnRequestsScreen";
 import SubscriptionDetailScreen from "./src/screens/SubscriptionDetailScreen";
 import SubscriptionsScreen from "./src/screens/SubscriptionsScreen";
 import { clearAdminSession, getAdminSession, saveAdminSession } from "./src/services/session";
@@ -98,6 +99,7 @@ export default function App() {
                 {(props) => <TabNavigator {...props} onLogout={handleLogout} />}
               </Stack.Screen>
               <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+              <Stack.Screen name="ReturnRequests" component={ReturnRequestsScreen} />
               <Stack.Screen name="SubscriptionDetail" component={SubscriptionDetailScreen} />
               <Stack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
             </>

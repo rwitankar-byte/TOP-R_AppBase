@@ -20,6 +20,7 @@ async function request(path, options = {}) {
 
 export const api = {
   getOrders: (status) => request(`/orders${status && status !== "All" ? `?status=${encodeURIComponent(status)}` : ""}`),
+  getReturnRequests: () => request("/orders/returns"),
   updateOrderStatus: (id, status) =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   getSubscriptions: (status) =>
@@ -33,6 +34,6 @@ export const api = {
       body: JSON.stringify({ quantity_available: quantity })
     }),
   getUsers: () => request("/users"),
-  approveReturn: (subscriptionId) =>
-    request("/admin/approve-return", { method: "POST", body: JSON.stringify({ subscription_id: subscriptionId }) })
+  approveReturn: (payload) =>
+    request("/admin/approve-return", { method: "POST", body: JSON.stringify(payload) })
 };

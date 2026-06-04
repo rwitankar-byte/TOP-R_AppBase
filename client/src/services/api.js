@@ -24,7 +24,13 @@ export const api = {
   updateAddress: (id, updates) => request(`/addresses/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
   deleteAddress: (id) => request(`/addresses/${id}`, { method: "DELETE" }),
   placeOrder: (order) => request("/orders", { method: "POST", body: JSON.stringify(order) }),
-  getOrders: (userId) => request(`/orders/${userId}`),
+  getOrders: (userId, filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.type) params.set("type", filters.type);
+    if (filters.status) params.set("status", filters.status);
+    const query = params.toString();
+    return request(`/orders/${userId}${query ? `?${query}` : ""}`);
+  },
   getSubscriptions: (userId, status) => request(`/subscriptions/${userId}${status ? `?status=${status}` : ""}`),
   createSubscription: (subscription) =>
     request("/subscriptions", { method: "POST", body: JSON.stringify(subscription) }),

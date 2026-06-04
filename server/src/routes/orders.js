@@ -4,6 +4,88 @@ import { requireAdmin } from "../middleware/admin.js";
 
 const router = Router();
 
+function applyOrderFilters(query, req) {
+  let nextQuery = query;
+  if (req.query.status) {
+    nextQuery = nextQuery.eq("status", req.query.status);
+  }
+  if (req.query.type) {
+    nextQuery = nextQuery.eq("type", req.query.type);
+  }
+  return nextQuery;
+}
+
+async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = false } = {}) {
+  const supabase = requireSupabase();
+  let query = supabase
+    .from("orders")
+    .select("*, users(phone,name), addresses(*), order_items(*, products(*))")
+    .order("created_at", { ascending: false });
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+  if (returnsOnly) {
+    query = query.eq("type", "return");
+  } else {
+    query = applyOrderFilters(query, req);
+  }
+  if (pendingOnly) {
+    query = query.eq("status", "Placed");
+  }
+
+  let { data, error } = await query;
+  if (error?.message?.includes("type")) {
+    let fallbackQuery = supabase
+      .from("orders")
+      .select("*, users(phone,name), addresses(*), order_items(*, products(*))")
+      .order("created_at", { ascending: false });
+    if (userId) {
+      fallbackQuery = fallbackQuery.eq("user_id", userId);
+    }
+    if (returnsOnly || req.query.type) {
+      fallbackQuery = fallbackQuery.eq("order_type", returnsOnly ? "return" : req.query.type);
+    }
+    if (req.query.status || pendingOnly) {
+      fallbackQuery = fallbackQuery.eq("status", pendingOnly ? "Placed" : req.query.status);
+    }
+    const fallback = await fallbackQuery;
+    data = fallback.data;
+    error = fallback.error;
+  }
+  if (error) throw error;
+  return data || [];
+}
+
+async function attachSubscriptionsToReturns(returnOrders) {
+  if (!returnOrders.length) return returnOrders;
+  const supabase = requireSupabase();
+  const userIds = [...new Set(returnOrders.map((order) => order.user_id).filter(Boolean))];
+  if (!userIds.length) return returnOrders;
+
+  const { data: subscriptions, error } = await supabase
+    .from("subscriptions")
+    .select("*, products(*)")
+    .in("user_id", userIds);
+  if (error) throw error;
+
+  return returnOrders.map((order) => {
+    const firstItem = order.order_items?.[0];
+    const subscription = (subscriptions || []).find(
+      (item) =>
+        item.user_id === order.user_id &&
+        (!firstItem?.product_id || item.product_id === firstItem.product_id) &&
+        item.deposit_refunded !== true
+    );
+    return {
+      ...order,
+      subscription,
+      subscription_id: subscription?.id || null,
+      jar_count: subscription?.jar_count || subscription?.quantity || firstItem?.quantity || 1
+    };
+  });
+}
+
 router.post("/", async (req, res, next) => {
   try {
     console.log("POST /orders body:", JSON.stringify(req.body));
@@ -41,7 +123,7 @@ router.post("/", async (req, res, next) => {
       .single();
     if (orderError?.message?.includes("order_type")) {
       const { order_type, ...fallbackPayload } = orderPayload;
-      const fallback = await supabase.from("orders").insert(fallbackPayload).select().single();
+      const fallback = await supabase.from("orders").insert({ ...fallbackPayload, type: orderType }).select().single();
       order = fallback.data;
       orderError = fallback.error;
     }
@@ -92,16 +174,16 @@ router.post("/", async (req, res, next) => {
 
 router.get("/", requireAdmin, async (req, res, next) => {
   try {
-    let query = requireSupabase()
-      .from("orders")
-      .select("*, users(phone,name), addresses(*), order_items(*, products(*))")
-      .order("created_at", { ascending: false });
-    if (req.query.status) {
-      query = query.eq("status", req.query.status);
-    }
-    const { data, error } = await query;
-    if (error) throw error;
-    res.json(data);
+    res.json(await fetchOrders(req));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/returns", requireAdmin, async (req, res, next) => {
+  try {
+    const returns = await fetchOrders(req, { returnsOnly: true, pendingOnly: true });
+    res.json(await attachSubscriptionsToReturns(returns));
   } catch (error) {
     next(error);
   }
@@ -109,13 +191,7 @@ router.get("/", requireAdmin, async (req, res, next) => {
 
 router.get("/:userId", async (req, res, next) => {
   try {
-    const { data, error } = await requireSupabase()
-      .from("orders")
-      .select("*, order_items(*, products(*)), addresses(*)")
-      .eq("user_id", req.params.userId)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    res.json(data);
+    res.json(await fetchOrders(req, { userId: req.params.userId }));
   } catch (error) {
     next(error);
   }

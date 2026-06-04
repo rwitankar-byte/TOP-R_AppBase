@@ -7,17 +7,38 @@ import { getOrCreateMockSession } from "../services/session";
 export default function ReturnEmptyJarScreen() {
   const [session, setSession] = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [pendingReturns, setPendingReturns] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const loadReturnData = async () => {
+    setLoading(true);
+    try {
+      const storedSession = await getOrCreateMockSession();
+      setSession(storedSession);
+      const [subscriptionData, returnData] = await Promise.all([
+        api.getSubscriptions(storedSession.user.id, "Active"),
+        api.getOrders(storedSession.user.id, { type: "return", status: "Placed" })
+      ]);
+      setSubscriptions(subscriptionData);
+      setPendingReturns(returnData);
+    } catch (error) {
+      Alert.alert("Return Empty Jar", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    getOrCreateMockSession()
-      .then(async (storedSession) => {
-        setSession(storedSession);
-        setSubscriptions(await api.getSubscriptions(storedSession.user.id, "Active"));
-      })
-      .catch((error) => Alert.alert("Return Empty Jar", error.message))
-      .finally(() => setLoading(false));
+    loadReturnData();
   }, []);
+
+  const findPendingReturn = (subscription) =>
+    pendingReturns.find(
+      (order) =>
+        order.user_id === subscription.user_id &&
+        order.status === "Placed" &&
+        order.order_items?.some((item) => item.product_id === subscription.product_id)
+    );
 
   const requestReturn = (subscription) => {
     const jars = Number(subscription.jar_count || subscription.quantity || 1);
@@ -44,6 +65,7 @@ export default function ReturnEmptyJarScreen() {
               ]
             });
             Alert.alert("Return request placed", `Refund of ₹${refund} will be processed after jar pickup.`);
+            await loadReturnData();
           } catch (error) {
             Alert.alert("Return failed", error.message);
           }
@@ -60,12 +82,22 @@ export default function ReturnEmptyJarScreen() {
         {!loading && subscriptions.length === 0 && <Text className="text-muted">No active subscriptions with jars.</Text>}
         {subscriptions.map((subscription) => {
           const jars = Number(subscription.jar_count || subscription.quantity || 1);
+          const pendingReturn = findPendingReturn(subscription);
           return (
             <View key={subscription.id} className="border border-gray-100 rounded-lg p-4 mb-3">
               <Text className="font-extrabold text-ink">{subscription.products?.name || "Water Jar Subscription"}</Text>
               <Text className="text-muted mt-1">{jars} jars subscribed</Text>
-              <TouchableOpacity className="bg-primary rounded-lg py-3 items-center mt-3" onPress={() => requestReturn(subscription)}>
-                <Text className="text-white font-bold">Request Return</Text>
+              {pendingReturn && (
+                <Text className="text-primary font-bold mt-2">Return request pending. Awaiting pickup and approval.</Text>
+              )}
+              <TouchableOpacity
+                className={`rounded-lg py-3 items-center mt-3 ${pendingReturn ? "bg-gray-300" : "bg-primary"}`}
+                onPress={() => requestReturn(subscription)}
+                disabled={Boolean(pendingReturn)}
+              >
+                <Text className="text-white font-bold">
+                  {pendingReturn ? "Return Requested - Pending Approval" : "Request Return"}
+                </Text>
               </TouchableOpacity>
             </View>
           );

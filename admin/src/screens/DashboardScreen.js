@@ -19,6 +19,7 @@ function SummaryCard({ label, value, tone = "primary" }) {
 
 export default function DashboardScreen({ navigation, onLogout }) {
   const [orders, setOrders] = useState([]);
+  const [returnRequests, setReturnRequests] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,12 +27,14 @@ export default function DashboardScreen({ navigation, onLogout }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [orderData, subscriptionData, inventoryData] = await Promise.all([
+      const [orderData, returnData, subscriptionData, inventoryData] = await Promise.all([
         api.getOrders(),
+        api.getReturnRequests(),
         api.getSubscriptions("Active"),
         api.getInventory()
       ]);
       setOrders(orderData);
+      setReturnRequests(returnData);
       setSubscriptions(subscriptionData);
       setInventory(inventoryData);
     } catch (error) {
@@ -64,7 +67,11 @@ export default function DashboardScreen({ navigation, onLogout }) {
             </View>
             <View className="flex-row">
               <SummaryCard label="Active subscriptions" value={subscriptions.length} />
+              <SummaryCard label="Return requests" value={returnRequests.length} tone={returnRequests.length ? "alert" : "primary"} />
+            </View>
+            <View className="flex-row">
               <SummaryCard label="Low stock alerts" value={lowStock.length} tone={lowStock.length ? "alert" : "primary"} />
+              <View className="flex-1 mx-1 mb-3" />
             </View>
 
             {lowStock.length > 0 && (
@@ -79,6 +86,7 @@ export default function DashboardScreen({ navigation, onLogout }) {
             <Text className="text-ink font-extrabold text-lg mb-3">Quick actions</Text>
             {[
               ["View Orders", "Orders", "receipt"],
+              ["Return Requests", "ReturnRequests", "archive"],
               ["View Subscriptions", "Subscriptions", "repeat"],
               ["Manage Inventory", "Inventory", "cube"]
             ].map(([label, route, icon]) => (
