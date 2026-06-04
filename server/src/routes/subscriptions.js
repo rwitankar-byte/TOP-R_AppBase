@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
+import { requireAdmin } from "../middleware/admin.js";
 
 const router = Router();
 const JAR_DEPOSIT = 250;
@@ -70,6 +71,23 @@ router.post("/", async (req, res, next) => {
       .single();
     if (error) throw error;
     res.status(201).json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/", requireAdmin, async (req, res, next) => {
+  try {
+    let query = requireSupabase()
+      .from("subscriptions")
+      .select("*, users(phone,name,wallet_balance), products(*), addresses(*)")
+      .order("start_date", { ascending: false });
+    if (req.query.status) {
+      query = query.eq("status", req.query.status);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
   } catch (error) {
     next(error);
   }

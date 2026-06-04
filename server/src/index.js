@@ -3,6 +3,7 @@ import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
 import addressRoutes from "./routes/addresses.js";
+import adminRoutes from "./routes/admin.js";
 import authRoutes from "./routes/auth.js";
 import inventoryRoutes from "./routes/inventory.js";
 import orderRoutes from "./routes/orders.js";
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "water-app-server" }));
+app.use("/admin", adminRoutes);
 app.use("/auth", authRoutes);
 app.use("/products", productRoutes);
 app.use("/orders", orderRoutes);

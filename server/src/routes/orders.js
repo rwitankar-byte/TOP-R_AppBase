@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
+import { requireAdmin } from "../middleware/admin.js";
 
 const router = Router();
 
@@ -89,6 +90,23 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+router.get("/", requireAdmin, async (req, res, next) => {
+  try {
+    let query = requireSupabase()
+      .from("orders")
+      .select("*, users(phone,name), addresses(*), order_items(*, products(*))")
+      .order("created_at", { ascending: false });
+    if (req.query.status) {
+      query = query.eq("status", req.query.status);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:userId", async (req, res, next) => {
   try {
     const { data, error } = await requireSupabase()
@@ -103,7 +121,7 @@ router.get("/:userId", async (req, res, next) => {
   }
 });
 
-router.patch("/:id/status", async (req, res, next) => {
+router.patch("/:id/status", requireAdmin, async (req, res, next) => {
   try {
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: "status is required" });
