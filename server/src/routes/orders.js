@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { Expo } from "expo-server-sdk";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
 
 const router = Router();
+const expo = new Expo();
 
 function applyOrderFilters(query, req) {
   let nextQuery = query;
@@ -84,6 +86,42 @@ async function attachSubscriptionsToReturns(returnOrders) {
       jar_count: subscription?.jar_count || subscription?.quantity || firstItem?.quantity || 1
     };
   });
+}
+
+async function notifyOrderStatus(orderId, status) {
+  try {
+    const supabase = requireSupabase();
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("user_id")
+      .eq("id", orderId)
+      .single();
+    if (orderError) throw orderError;
+
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("push_token")
+      .eq("id", order.user_id)
+      .single();
+    if (userError) throw userError;
+
+    if (!user?.push_token || !Expo.isExpoPushToken(user.push_token)) {
+      return;
+    }
+
+    const tickets = await expo.sendPushNotificationsAsync([
+      {
+        to: user.push_token,
+        sound: "default",
+        title: "Order Update",
+        body: `Your order is now: ${status}`,
+        data: { orderId, status }
+      }
+    ]);
+    console.log("Order status push notification queued:", JSON.stringify(tickets));
+  } catch (error) {
+    console.error("Failed to send order status notification", error.message);
+  }
 }
 
 router.post("/", async (req, res, next) => {
@@ -208,6 +246,7 @@ router.patch("/:id/status", requireAdmin, async (req, res, next) => {
       .select()
       .single();
     if (error) throw error;
+    await notifyOrderStatus(req.params.id, status);
     res.json(data);
   } catch (error) {
     next(error);

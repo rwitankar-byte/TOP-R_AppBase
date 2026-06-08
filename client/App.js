@@ -1,5 +1,8 @@
+import { useCallback, useEffect, useRef } from "react";
+import { Alert } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
 import { CartProvider } from "./src/context/CartContext";
 import AddressBookScreen from "./src/screens/AddressBookScreen";
@@ -12,13 +15,46 @@ import PaymentScreen from "./src/screens/PaymentScreen";
 import ReturnEmptyJarScreen from "./src/screens/ReturnEmptyJarScreen";
 import TransactionHistoryScreen from "./src/screens/TransactionHistoryScreen";
 import Tabs from "./src/navigation/Tabs";
+import { api } from "./src/services/api";
+import { registerForPushNotifications } from "./src/services/notifications";
+import { getSession } from "./src/services/session";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const notificationSubscription = useRef(null);
+  const registeredUserId = useRef(null);
+
+  const setupNotifications = useCallback(async () => {
+    const session = await getSession();
+    if (!session?.user?.id || registeredUserId.current === session.user.id) return;
+
+    const token = await registerForPushNotifications();
+    if (token) {
+      await api.updatePushToken(session.user.id, token);
+      registeredUserId.current = session.user.id;
+    }
+
+    if (!notificationSubscription.current) {
+      notificationSubscription.current = Notifications.addNotificationReceivedListener((notification) => {
+        const title = notification.request.content.title || "Notification";
+        const body = notification.request.content.body || "";
+        Alert.alert(title, body);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    setupNotifications().catch((error) => console.log("Notification setup failed:", error.message));
+
+    return () => {
+      notificationSubscription.current?.remove();
+    };
+  }, [setupNotifications]);
+
   return (
     <CartProvider>
-      <NavigationContainer>
+      <NavigationContainer onStateChange={() => setupNotifications().catch((error) => console.log("Notification setup failed:", error.message))}>
         <StatusBar style="dark" />
         <Stack.Navigator
           screenOptions={{

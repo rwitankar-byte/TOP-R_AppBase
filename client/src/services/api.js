@@ -19,6 +19,8 @@ export const api = {
     request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ phone, token }) }),
   getProducts: () => request("/products"),
   getUser: (userId) => request(`/users/${userId}`),
+  updatePushToken: (userId, pushToken) =>
+    request(`/users/${userId}/push-token`, { method: "PATCH", body: JSON.stringify({ push_token: pushToken }) }),
   getAddresses: (userId) => request(`/addresses/${userId}`),
   addAddress: (address) => request("/addresses", { method: "POST", body: JSON.stringify(address) }),
   updateAddress: (id, updates) => request(`/addresses/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),

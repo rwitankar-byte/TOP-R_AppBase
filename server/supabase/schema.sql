@@ -5,6 +5,7 @@ create table if not exists public.users (
   phone text unique not null,
   name text,
   avatar_url text,
+  push_token text,
   wallet_balance numeric(10, 2) not null default 0,
   created_at timestamptz not null default now()
 );
