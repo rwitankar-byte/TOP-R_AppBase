@@ -179,22 +179,6 @@ router.patch("/:id", async (req, res, next) => {
       .single();
     if (error) throw error;
 
-    if (updates.status === "Active" && existingSubscription?.status !== "Active") {
-      const amount =
-        Number(existingSubscription?.jar_deposit || data.jar_deposit || 0) +
-        Number(existingSubscription?.water_charge_per_delivery || data.water_charge_per_delivery || 0);
-      if (amount > 0) {
-        const { error: paymentError } = await supabase.from("payments").insert({
-          user_id: data.user_id,
-          order_id: null,
-          amount,
-          method: "Subscription Checkout",
-          status: "Paid"
-        });
-        if (paymentError) throw paymentError;
-      }
-    }
-
     res.json(data);
   } catch (error) {
     next(error);

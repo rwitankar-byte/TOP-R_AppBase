@@ -11,6 +11,12 @@ const statusClasses = {
   Refunded: "bg-blue-100 text-blue-700"
 };
 
+function formatDescription(payment) {
+  const raw = payment.description || payment.method || "Payment";
+  const clean = raw.includes("Razorpay:") ? "Order Payment" : raw;
+  return clean.length > 40 ? `${clean.slice(0, 37)}...` : clean;
+}
+
 export default function TransactionHistoryScreen() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,13 +38,13 @@ export default function TransactionHistoryScreen() {
         {payments.map((payment) => (
           <View key={payment.id} className="border border-gray-100 rounded-lg p-4 mb-3">
             <View className="flex-row justify-between items-center">
-              <Text className="font-bold text-ink">{payment.description || payment.method || "Payment"}</Text>
+              <Text className="font-bold text-ink">{formatDescription(payment)}</Text>
               <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClasses[payment.status] || "bg-gray-100 text-gray-700"}`}>
                 {payment.status}
               </Text>
             </View>
             <Text className="text-primary font-extrabold mt-2">₹{Number(payment.amount || 0)}</Text>
-            <Text className="text-muted mt-1">{payment.method} • {new Date(payment.created_at).toLocaleDateString()}</Text>
+            <Text className="text-muted mt-1">{formatDescription(payment)} • {new Date(payment.created_at).toLocaleDateString()}</Text>
           </View>
         ))}
       </ScrollView>

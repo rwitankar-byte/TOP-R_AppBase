@@ -180,12 +180,21 @@ router.post("/verify", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid Razorpay signature" });
     }
 
-    const { data, error } = await requireSupabase()
+    const supabase = requireSupabase();
+    let { data, error } = await supabase
       .from("payments")
-      .update({ status: "Paid", method: `Razorpay:${razorpay_order_id}:${razorpay_payment_id}` })
+      .update({ status: "Paid", method: "Order Payment", description: "Order Payment" })
       .eq("method", `Razorpay:${razorpay_order_id}`)
       .select()
-      .throwOnError();
+    if (error?.message?.includes("description")) {
+      const retry = await supabase
+        .from("payments")
+        .update({ status: "Paid", method: "Order Payment" })
+        .eq("method", `Razorpay:${razorpay_order_id}`)
+        .select();
+      data = retry.data;
+      error = retry.error;
+    }
     if (error) throw error;
 
     res.json({ success: true, payment: data?.[0] || null, payments: data || [] });
