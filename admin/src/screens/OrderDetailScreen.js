@@ -15,6 +15,7 @@ const statusActions = [
 export default function OrderDetailScreen({ navigation, route }) {
   const [order, setOrder] = useState(route.params.order);
   const [saving, setSaving] = useState(false);
+  const isRefill = order.order_type === "refill" || order.type === "refill";
 
   const updateStatus = async (status) => {
     setSaving(true);
@@ -36,13 +37,17 @@ export default function OrderDetailScreen({ navigation, route }) {
         <View className="border border-gray-100 rounded-lg p-4 mb-4">
           <View className="flex-row justify-between items-center mb-3">
             <Text className="text-ink font-extrabold">{shortId(order.id)}</Text>
-            <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text>
+            <View className="flex-row items-center">
+              {isRefill && <Text className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-bold mr-2">Refill</Text>}
+              <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text>
+            </View>
           </View>
           <Text className="text-muted">Customer: {order.users?.phone || "Unknown"}</Text>
           <Text className="text-muted mt-1">Name: {order.users?.name || "Not set"}</Text>
           <Text className="text-muted mt-1">Address: {order.addresses?.full_address || "No address"}</Text>
           <Text className="text-muted mt-1">Time: {dateTime(order.created_at)}</Text>
           <Text className="text-primary text-2xl font-extrabold mt-3">{money(order.total_amount)}</Text>
+          {isRefill && <Text className="text-blue-700 font-bold mt-2">Subscription refill — delivery boy picks up empty jars</Text>}
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Items</Text>

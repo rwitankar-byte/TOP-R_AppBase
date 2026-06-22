@@ -10,14 +10,16 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 router.post("/", async (req, res, next) => {
   try {
     const { user_id, product_id, address_id, frequency, start_date, quantity, jar_count, status } = req.body;
-    if (!user_id || !product_id || !frequency || !start_date) {
-      return res.status(400).json({ error: "user_id, product_id, frequency, and start_date are required" });
+    if (!user_id || !product_id) {
+      return res.status(400).json({ error: "user_id and product_id are required" });
     }
 
     const supabase = requireSupabase();
     const jars = Math.max(1, Number(jar_count ?? quantity ?? 1));
     const jarDeposit = jars * JAR_DEPOSIT;
     const waterCharge = jars * WATER_CHARGE;
+    const subscriptionFrequency = frequency || "Custom";
+    const subscriptionStartDate = start_date || new Date().toISOString().slice(0, 10);
 
     let resolvedAddressId = address_id || null;
     if (!resolvedAddressId) {
@@ -39,8 +41,8 @@ router.post("/", async (req, res, next) => {
         user_id,
         product_id,
         address_id: resolvedAddressId,
-        frequency,
-        start_date,
+        frequency: subscriptionFrequency,
+        start_date: subscriptionStartDate,
         status: status || "Pending",
         quantity: jars,
         jar_count: jars,
@@ -58,8 +60,8 @@ router.post("/", async (req, res, next) => {
         user_id,
         product_id,
         address_id: resolvedAddressId,
-        frequency,
-        start_date,
+        frequency: subscriptionFrequency,
+        start_date: subscriptionStartDate,
         quantity: jars,
         jar_count: jars,
         jar_deposit: jarDeposit,

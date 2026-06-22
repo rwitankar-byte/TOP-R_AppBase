@@ -37,16 +37,18 @@ export default function CartScreen({ navigation }) {
   );
 
   const completeCheckout = async (payment) => {
-    const productItems = items.filter((item) => item.type !== "subscription");
+    const productItems = items.filter((item) => item.type === "product");
     const subscriptionItems = items.filter((item) => item.type === "subscription");
+    const refillItems = items.filter((item) => item.type === "refill");
+    let paymentLinked = false;
 
     let order = null;
     if (productItems.length) {
       const orderBody = {
         user_id: session.user.id,
         address_id: address.id,
-        payment_id: payment?.id,
-        total_amount: Number(total),
+        payment_id: paymentLinked ? undefined : payment?.id,
+        total_amount: productItems.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
         items: productItems.map((item) => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -55,6 +57,7 @@ export default function CartScreen({ navigation }) {
       };
       console.log("POST /orders request body:", JSON.stringify(orderBody));
       order = await api.placeOrder(orderBody);
+      paymentLinked = Boolean(payment?.id);
     }
 
     for (const item of subscriptionItems) {
@@ -70,6 +73,21 @@ export default function CartScreen({ navigation }) {
       await api.updateSubscription(subscription.id, { status: "Active" });
     }
 
+    for (const item of refillItems) {
+      const refillBody = {
+        user_id: session.user.id,
+        address_id: address.id,
+        payment_id: paymentLinked ? undefined : payment?.id,
+        type: "refill",
+        subscription_id: item.subscription_id,
+        total_amount: Number(item.quantity) * 40,
+        items: [{ product_id: item.product_id, quantity: item.quantity, unit_price: 40 }]
+      };
+      console.log("POST /orders refill request body:", JSON.stringify(refillBody));
+      await api.placeOrder(refillBody);
+      paymentLinked = Boolean(payment?.id);
+    }
+
     clearCart();
     navigation.navigate("AllOrders");
   };
@@ -80,8 +98,8 @@ export default function CartScreen({ navigation }) {
       return;
     }
 
-    const productItems = items.filter((item) => item.type !== "subscription");
-    if (productItems.length && !address?.id) {
+    const deliveryItems = items.filter((item) => item.type !== "subscription");
+    if (deliveryItems.length && !address?.id) {
       Alert.alert("Address required", "No delivery address was found for this user.");
       return;
     }
@@ -181,13 +199,14 @@ export default function CartScreen({ navigation }) {
             )}
             <View className="flex-1 ml-3">
               <Text className="font-bold text-ink">{item.name}</Text>
+              {item.type === "refill" && <Text className="text-primary text-xs font-bold mt-1">Refill - Water Only</Text>}
               {item.type === "subscription" && (
                 <Text className="text-muted text-xs mt-1">
-                  Deposit ₹{item.jar_deposit} + delivery ₹{item.water_charge_per_delivery}
+                  Deposit ₹{item.jar_deposit} + water fill ₹{item.water_charge_per_delivery}
                 </Text>
               )}
               <Text className="text-primary font-extrabold mt-1">₹{Number(item.price)}</Text>
-              {item.type === "subscription" ? (
+              {item.type === "subscription" || item.type === "refill" ? (
                 <TouchableOpacity className="bg-red-50 px-3 py-2 rounded-md mt-3 self-start" onPress={() => updateQuantity(item.id, 0)}>
                   <Text className="text-red-500 font-bold">Remove</Text>
                 </TouchableOpacity>

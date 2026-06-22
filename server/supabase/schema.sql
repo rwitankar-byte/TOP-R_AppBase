@@ -35,7 +35,7 @@ create table if not exists public.orders (
   user_id uuid not null references public.users(id) on delete cascade,
   address_id uuid references public.addresses(id) on delete set null,
   status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Out for Delivery', 'Delivered', 'Cancelled')),
-  order_type text not null default 'delivery' check (order_type in ('delivery', 'return')),
+  order_type text not null default 'delivery' check (order_type in ('delivery', 'return', 'refill')),
   total_amount numeric(10, 2) not null,
   delivery_date date,
   created_at timestamptz not null default now()
@@ -63,6 +63,9 @@ create table if not exists public.subscriptions (
   water_charge_per_delivery numeric(10, 2) not null default 40,
   deposit_refunded boolean not null default false
 );
+
+alter table public.orders
+add column if not exists subscription_id uuid references public.subscriptions(id) on delete set null;
 
 create table if not exists public.inventory (
   id uuid primary key default gen_random_uuid(),

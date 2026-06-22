@@ -14,6 +14,10 @@ function itemsText(order) {
     .join(", ");
 }
 
+function isRefill(order) {
+  return order.order_type === "refill" || order.type === "refill";
+}
+
 export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState("All");
@@ -62,7 +66,10 @@ export default function OrdersScreen({ navigation }) {
           >
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-ink font-extrabold">{shortId(order.id)}</Text>
-              <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text>
+              <View className="flex-row items-center">
+                {isRefill(order) && <Text className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-bold mr-2">Refill</Text>}
+                <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text>
+              </View>
             </View>
             <Text className="text-muted">Customer: {order.users?.phone || "Unknown"}</Text>
             <Text className="text-muted mt-1">Address: {order.addresses?.full_address || "No address"}</Text>

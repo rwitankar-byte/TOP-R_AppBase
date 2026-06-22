@@ -1,51 +1,44 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
 
-const frequencies = ["Daily", "Weekly", "Custom"];
 const JAR_DEPOSIT = 250;
 const WATER_CHARGE = 40;
 
-function formatDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function getNextDeliveryDate(subscription) {
-  const start = new Date(subscription.start_date);
-  const today = new Date();
-  if (Number.isNaN(start.getTime()) || start >= today) return subscription.start_date;
-
-  const next = new Date(start);
-  const step = subscription.frequency === "Daily" ? 1 : 7;
-  while (next < today) next.setDate(next.getDate() + step);
-  return formatDate(next);
+function Stepper({ value, onDecrease, onIncrease, maximum }) {
+  return (
+    <View className="flex-row items-center self-start border border-primary rounded-lg overflow-hidden">
+      <TouchableOpacity className="w-10 h-10 bg-primary items-center justify-center" onPress={onDecrease} disabled={value <= 1}>
+        <Text className="text-white text-xl font-extrabold">-</Text>
+      </TouchableOpacity>
+      <Text className="min-w-[60px] text-center text-primary text-xl font-extrabold">{value}</Text>
+      <TouchableOpacity className="w-10 h-10 bg-primary items-center justify-center" onPress={onIncrease} disabled={maximum && value >= maximum}>
+        <Text className="text-white text-xl font-extrabold">+</Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export default function SubscriptionsScreen({ navigation }) {
-  const { addSubscriptionToCart } = useCart();
+  const { addSubscriptionToCart, addRefillToCart } = useCart();
   const [session, setSession] = useState(null);
   const [products, setProducts] = useState([]);
-  const [addresses, setAddresses] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("");
   const [jarCount, setJarCount] = useState(1);
-  const [frequency, setFrequency] = useState("Weekly");
-  const [startDate, setStartDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [refillQuantities, setRefillQuantities] = useState({});
+  const [openRefillId, setOpenRefillId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const jars = Math.max(1, Number(jarCount || 1));
   const jarDeposit = jars * JAR_DEPOSIT;
   const waterCharge = jars * WATER_CHARGE;
-  const startCost = jarDeposit + waterCharge;
-
+  const startCost = jars * (JAR_DEPOSIT + WATER_CHARGE);
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId) || products[0],
     [products, selectedProductId]
@@ -59,13 +52,8 @@ export default function SubscriptionsScreen({ navigation }) {
       const productData = await api.getProducts();
       setProducts(productData);
       setSelectedProductId((current) => current || productData[0]?.id || "");
-
       if (storedSession?.user?.id) {
-        const [addressData, subscriptionData] = await Promise.all([
-          api.getAddresses(storedSession.user.id),
-          api.getSubscriptions(storedSession.user.id, "Active")
-        ]);
-        setAddresses(addressData);
+        const subscriptionData = await api.getSubscriptions(storedSession.user.id, "Active");
         setSubscriptions(subscriptionData.filter((subscription) => subscription.status === "Active"));
       }
     } catch (error) {
@@ -79,11 +67,9 @@ export default function SubscriptionsScreen({ navigation }) {
     loadData();
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => {
+    loadData();
+  }, []));
 
   const createSubscription = async () => {
     if (!selectedProduct?.id) {
@@ -96,18 +82,17 @@ export default function SubscriptionsScreen({ navigation }) {
       const activeSession = session?.user?.id ? session : await getOrCreateMockSession();
       setSession(activeSession);
       addSubscriptionToCart({
-        id: `subscription-${selectedProduct.id}-${frequency}-${formatDate(startDate)}-${jars}-${Date.now()}`,
-        name: `${selectedProduct.name} Subscription (${frequency}) x ${jars} jar${jars > 1 ? "s" : ""}`,
+        id: `subscription-${selectedProduct.id}-${jars}-${Date.now()}`,
+        name: `${selectedProduct.name} Subscription x ${jars} jar${jars > 1 ? "s" : ""}`,
         product_id: selectedProduct.id,
         jar_count: jars,
-        frequency,
-        start_date: formatDate(startDate),
+        frequency: "Custom",
         jar_deposit: jarDeposit,
         water_charge_per_delivery: waterCharge,
         total: startCost,
         price: startCost,
         image_url: selectedProduct.image_url,
-        user_id: activeSession.user.id,
+        user_id: activeSession.user.id
       });
       Alert.alert("Subscription added to cart", "Complete payment in Cart.");
       navigation.navigate("Cart");
@@ -129,22 +114,37 @@ export default function SubscriptionsScreen({ navigation }) {
 
   const confirmCancel = (subscription) => {
     const refund = Number(subscription.jar_deposit || subscription.jar_count * JAR_DEPOSIT);
-    Alert.alert(
-      "Cancel subscription",
-      `Return jars to get ₹${refund} refund to your wallet.`,
-      [
-        { text: "Keep Active", style: "cancel" },
-        {
-          text: "Confirm Return",
-          style: "destructive",
-          onPress: () =>
-            updateSubscription(subscription.id, {
-              status: "Cancelled",
-              jars_returned: true
-            })
-        }
-      ]
-    );
+    Alert.alert("Cancel subscription", `Return jars to get ₹${refund} refund to your wallet.`, [
+      { text: "Keep Active", style: "cancel" },
+      {
+        text: "Confirm Return",
+        style: "destructive",
+        onPress: () => updateSubscription(subscription.id, { status: "Cancelled", jars_returned: true })
+      }
+    ]);
+  };
+
+  const refillQuantityFor = (subscription) => Math.max(1, Number(refillQuantities[subscription.id] || 1));
+
+  const addRefill = (subscription) => {
+    const quantity = refillQuantityFor(subscription);
+    const productName = subscription.products?.name || "Water Jar";
+    addRefillToCart({
+      id: `refill-${subscription.id}-${Date.now()}`,
+      type: "refill",
+      subscription_id: subscription.id,
+      product_id: subscription.product_id,
+      quantity,
+      jar_count: Number(subscription.jar_count || subscription.quantity || 1),
+      price: quantity * WATER_CHARGE,
+      total: quantity * WATER_CHARGE,
+      unit_price: WATER_CHARGE,
+      name: `${productName} Refill x ${quantity} jar${quantity > 1 ? "s" : ""}`,
+      image_url: subscription.products?.image_url
+    });
+    setOpenRefillId(null);
+    Alert.alert("Refill added to cart", "Complete payment in Cart.");
+    navigation.navigate("Cart");
   };
 
   return (
@@ -158,88 +158,29 @@ export default function SubscriptionsScreen({ navigation }) {
             {products.map((product) => {
               const selected = product.id === selectedProduct?.id;
               return (
-                <TouchableOpacity
-                  key={product.id}
-                  className={`mr-2 px-4 py-3 rounded-md border ${selected ? "bg-primary border-primary" : "bg-white border-gray-200"}`}
-                  onPress={() => setSelectedProductId(product.id)}
-                >
+                <TouchableOpacity key={product.id} className={`mr-2 px-4 py-3 rounded-md border ${selected ? "bg-primary border-primary" : "bg-white border-gray-200"}`} onPress={() => setSelectedProductId(product.id)}>
                   <Text className={selected ? "text-white font-bold" : "text-ink font-bold"}>{product.name}</Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
 
-          <Text className="text-muted text-xs mb-2">Number of jars</Text>
-          <View className="flex-row items-center self-start border border-primary rounded-lg mb-4 overflow-hidden">
-            <TouchableOpacity
-              className="w-10 h-10 bg-primary items-center justify-center"
-              onPress={() => setJarCount((prev) => Math.max(1, prev - 1))}
-            >
-              <Text className="text-white text-xl font-extrabold">-</Text>
-            </TouchableOpacity>
-            <Text className="min-w-[60px] text-center text-primary text-xl font-extrabold">{jarCount}</Text>
-            <TouchableOpacity
-              className="w-10 h-10 bg-primary items-center justify-center"
-              onPress={() => setJarCount((prev) => prev + 1)}
-            >
-              <Text className="text-white text-xl font-extrabold">+</Text>
-            </TouchableOpacity>
+          <Text className="text-muted text-xs mb-2">How many jars?</Text>
+          <View className="mb-4">
+            <Stepper value={jars} onDecrease={() => setJarCount((prev) => Math.max(1, prev - 1))} onIncrease={() => setJarCount((prev) => prev + 1)} />
           </View>
-
-          <Text className="text-muted text-xs mb-2">Frequency</Text>
-          <View className="flex-row mb-4">
-            {frequencies.map((item) => (
-              <TouchableOpacity
-                key={item}
-                className={`mr-2 px-4 py-3 rounded-md ${frequency === item ? "bg-primary" : "bg-wash"}`}
-                onPress={() => setFrequency(item)}
-              >
-                <Text className={frequency === item ? "text-white font-bold" : "text-ink font-bold"}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text className="text-muted text-xs mb-2">Start date</Text>
-          {Platform.OS === "web" ? (
-            <TextInput
-              className="border border-gray-200 rounded-lg px-4 py-3 text-base mb-4"
-              value={formatDate(startDate)}
-              onChangeText={(value) => {
-                const next = new Date(value);
-                if (!Number.isNaN(next.getTime())) setStartDate(next);
-              }}
-              placeholder="YYYY-MM-DD"
-            />
-          ) : (
-            <>
-              <TouchableOpacity className="border border-gray-200 rounded-lg px-4 py-3 mb-4" onPress={() => setShowDatePicker(true)}>
-                <Text className="text-ink font-bold">{formatDate(startDate)}</Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  minimumDate={new Date()}
-                  onChange={(_event, date) => {
-                    setShowDatePicker(false);
-                    if (date) setStartDate(date);
-                  }}
-                />
-              )}
-            </>
-          )}
 
           <View className="bg-wash rounded-lg p-4 mb-4">
             <View className="flex-row justify-between mb-2">
-              <Text className="text-muted">Jar deposit ({jars} × ₹250)</Text>
+              <Text className="text-muted">Jar deposit ({jars} x ₹250)</Text>
               <Text className="font-bold">₹{jarDeposit}</Text>
             </View>
             <View className="flex-row justify-between mb-2">
-              <Text className="text-muted">First delivery ({jars} × ₹40)</Text>
+              <Text className="text-muted">Water fill ({jars} x ₹40)</Text>
               <Text className="font-bold">₹{waterCharge}</Text>
             </View>
             <View className="flex-row justify-between">
-              <Text className="text-ink font-extrabold">Start cost</Text>
+              <Text className="text-ink font-extrabold">Total start cost</Text>
               <Text className="text-primary font-extrabold">₹{startCost}</Text>
             </View>
           </View>
@@ -252,33 +193,54 @@ export default function SubscriptionsScreen({ navigation }) {
         <Text className="text-ink font-extrabold text-lg mb-3">Active subscriptions</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && subscriptions.length === 0 && <Text className="text-muted mb-4">No subscriptions yet.</Text>}
-        {subscriptions.map((subscription) => (
-          <View key={subscription.id} className="border border-gray-100 rounded-lg p-4 mb-4">
-            <View className="flex-row justify-between">
-              <Text className="font-bold text-ink">{subscription.products?.name || "Water Jar Subscription"}</Text>
-              <Text className="text-primary font-bold">{subscription.status}</Text>
+        {subscriptions.map((subscription) => {
+          const maxJars = Number(subscription.jar_count || subscription.quantity || 1);
+          const refillQuantity = refillQuantityFor(subscription);
+          return (
+            <View key={subscription.id} className="border border-gray-100 rounded-lg p-4 mb-4">
+              <View className="flex-row justify-between">
+                <Text className="font-bold text-ink">{subscription.products?.name || "Water Jar Subscription"}</Text>
+                <Text className="text-primary font-bold">{subscription.status}</Text>
+              </View>
+              <Text className="text-muted mt-2">Jars at home: {maxJars}</Text>
+              <Text className="text-muted mt-1">Jar deposit: ₹{Number(subscription.jar_deposit || 0)}</Text>
+
+              {openRefillId === subscription.id ? (
+                <View className="bg-wash rounded-lg p-3 mt-4">
+                  <Text className="text-ink font-bold mb-2">Refill quantity</Text>
+                  <Stepper
+                    value={refillQuantity}
+                    maximum={maxJars}
+                    onDecrease={() => setRefillQuantities((current) => ({ ...current, [subscription.id]: Math.max(1, refillQuantity - 1) }))}
+                    onIncrease={() => setRefillQuantities((current) => ({ ...current, [subscription.id]: Math.min(maxJars, refillQuantity + 1) }))}
+                  />
+                  <Text className="text-primary font-extrabold mt-3">Water refill cost: ₹{refillQuantity * WATER_CHARGE}</Text>
+                  <View className="flex-row mt-3">
+                    <TouchableOpacity className="bg-primary rounded-md px-4 py-3 mr-3" onPress={() => addRefill(subscription)}>
+                      <Text className="text-white font-bold">Add to Cart</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity className="bg-white rounded-md px-4 py-3" onPress={() => setOpenRefillId(null)}>
+                      <Text className="text-ink font-bold">Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity className="bg-primary rounded-lg py-3 items-center mt-4" onPress={() => setOpenRefillId(subscription.id)}>
+                  <Text className="text-white font-bold">Request Refill</Text>
+                </TouchableOpacity>
+              )}
+
+              <View className="flex-row mt-3">
+                <TouchableOpacity className="bg-wash px-4 py-2 rounded-md mr-3" onPress={() => updateSubscription(subscription.id, { status: "Paused" })}>
+                  <Text className="font-bold text-ink">Pause</Text>
+                </TouchableOpacity>
+                <TouchableOpacity className="bg-red-50 px-4 py-2 rounded-md" onPress={() => confirmCancel(subscription)}>
+                  <Text className="font-bold text-red-500">Cancel</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text className="text-muted mt-2">
-              {subscription.jar_count || subscription.quantity} jars • {subscription.frequency}
-            </Text>
-            <Text className="text-muted mt-1">Next delivery: {getNextDeliveryDate(subscription)}</Text>
-            <Text className="text-muted mt-1">
-              Deposit: ₹{Number(subscription.jar_deposit || 0)} • Delivery: ₹{Number(subscription.water_charge_per_delivery || 0)}
-            </Text>
-            <View className="flex-row mt-4">
-              <TouchableOpacity
-                className="bg-wash px-4 py-2 rounded-md mr-3"
-                onPress={() => updateSubscription(subscription.id, { status: subscription.status === "Paused" ? "Active" : "Paused" })}
-                disabled={subscription.status === "Cancelled"}
-              >
-                <Text className="font-bold text-ink">Pause</Text>
-              </TouchableOpacity>
-              <TouchableOpacity className="bg-red-50 px-4 py-2 rounded-md" onPress={() => confirmCancel(subscription)}>
-                <Text className="font-bold text-red-500">Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+          );
+        })}
         <View className="h-8" />
       </ScrollView>
     </SafeAreaView>

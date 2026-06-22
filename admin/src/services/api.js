@@ -20,6 +20,8 @@ async function request(path, options = {}) {
 
 export const api = {
   getOrders: (status) => request(`/orders${status && status !== "All" ? `?status=${encodeURIComponent(status)}` : ""}`),
+  getSubscriptionRefills: (subscriptionId) =>
+    request(`/orders?subscription_id=${encodeURIComponent(subscriptionId)}&type=refill`),
   getReturnRequests: () => request("/orders/returns"),
   updateOrderStatus: (id, status) =>
     request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),

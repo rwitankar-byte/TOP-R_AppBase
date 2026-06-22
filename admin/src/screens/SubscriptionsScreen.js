@@ -4,7 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
-import { money, nextDeliveryDate, statusClass } from "../utils/format";
+import { money, statusClass } from "../utils/format";
 
 const filters = ["Active", "Paused", "Cancelled"];
 
@@ -31,7 +31,7 @@ export default function SubscriptionsScreen({ navigation }) {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
-        <ScreenHeader title="Subscriptions" subtitle="Jar delivery plans" rightAction={loadSubscriptions} />
+        <ScreenHeader title="Subscriptions" subtitle="Customer jar ownership" rightAction={loadSubscriptions} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           {filters.map((item) => (
             <TouchableOpacity
@@ -60,11 +60,10 @@ export default function SubscriptionsScreen({ navigation }) {
             </View>
             <Text className="text-muted mt-2">Customer: {subscription.users?.phone || "Unknown"}</Text>
             <Text className="text-muted mt-1">
-              {subscription.jar_count || subscription.quantity} jars • {subscription.frequency}
+              Jars owned: {subscription.jar_count || subscription.quantity}
             </Text>
-            <Text className="text-muted mt-1">Next delivery: {nextDeliveryDate(subscription)}</Text>
             <Text className="text-primary font-extrabold mt-2">
-              Deposit {money(subscription.jar_deposit)} • Delivery {money(subscription.water_charge_per_delivery)}
+              Deposit {money(subscription.jar_deposit)} • Water fill {money(subscription.water_charge_per_delivery)}
             </Text>
           </TouchableOpacity>
         ))}

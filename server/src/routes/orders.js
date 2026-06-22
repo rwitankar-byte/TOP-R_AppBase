@@ -6,6 +6,29 @@ import { requireAdmin } from "../middleware/admin.js";
 const router = Router();
 const expo = new Expo();
 
+export function validateRefillItems({ subscription, userId, items }) {
+  if (subscription.user_id !== userId || subscription.status !== "Active") {
+    const error = new Error("Refills require an active subscription owned by this customer");
+    error.status = 400;
+    throw error;
+  }
+
+  const refillQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+  const availableJars = Number(subscription.jar_count || subscription.quantity || 0);
+  if (refillQuantity > availableJars) {
+    const error = new Error(`Refill quantity cannot exceed the ${availableJars} jars in this subscription`);
+    error.status = 400;
+    throw error;
+  }
+  if (items.some((item) => item.product_id !== subscription.product_id)) {
+    const error = new Error("Refill product must match the subscription product");
+    error.status = 400;
+    throw error;
+  }
+
+  return items.map((item) => ({ ...item, unit_price: 40 }));
+}
+
 function applyOrderFilters(query, req) {
   let nextQuery = query;
   if (req.query.status) {
@@ -13,6 +36,9 @@ function applyOrderFilters(query, req) {
   }
   if (req.query.type) {
     nextQuery = nextQuery.eq("type", req.query.type);
+  }
+  if (req.query.subscription_id) {
+    nextQuery = nextQuery.eq("subscription_id", req.query.subscription_id);
   }
   return nextQuery;
 }
@@ -50,6 +76,9 @@ async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = fal
     }
     if (req.query.status || pendingOnly) {
       fallbackQuery = fallbackQuery.eq("status", pendingOnly ? "Placed" : req.query.status);
+    }
+    if (req.query.subscription_id) {
+      fallbackQuery = fallbackQuery.eq("subscription_id", req.query.subscription_id);
     }
     const fallback = await fallbackQuery;
     data = fallback.data;
@@ -127,14 +156,14 @@ async function notifyOrderStatus(orderId, status) {
 router.post("/", async (req, res, next) => {
   try {
     console.log("POST /orders body:", JSON.stringify(req.body));
-    const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id } = req.body;
-    const orderType = type === "return" ? "return" : "delivery";
+    const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id, subscription_id } = req.body;
+    const orderType = ["delivery", "return", "refill"].includes(type) ? type : "delivery";
     if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
       return res.status(400).json({ error: "user_id, address_id, and items are required" });
     }
 
     const supabase = requireSupabase();
-    const normalizedItems = items.map((item) => ({
+    let normalizedItems = items.map((item) => ({
       product_id: item.product_id || item.id,
       quantity: Number(item.quantity || 0),
       unit_price: orderType === "return" ? 0 : Number(item.unit_price ?? item.price ?? 0)
@@ -144,15 +173,30 @@ router.post("/", async (req, res, next) => {
       return res.status(400).json({ error: "Each item requires product_id, quantity, and unit_price" });
     }
 
+    if (orderType === "refill") {
+      if (!subscription_id) {
+        return res.status(400).json({ error: "subscription_id is required for refill orders" });
+      }
+
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .select("id,user_id,product_id,jar_count,quantity,status")
+        .eq("id", subscription_id)
+        .single();
+      if (subscriptionError) throw subscriptionError;
+      normalizedItems = validateRefillItems({ subscription, userId: user_id, items: normalizedItems });
+    }
+
     const computedTotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-    const orderTotal = parseFloat(req.body.total_amount) || computedTotal;
+    const orderTotal = orderType === "refill" ? computedTotal : parseFloat(req.body.total_amount) || computedTotal;
     const orderPayload = {
       user_id,
       address_id: address_id || null,
       total_amount: orderTotal,
       delivery_date,
       status: "Placed",
-      order_type: orderType
+      order_type: orderType,
+      subscription_id: orderType === "refill" ? subscription_id : null
     };
     let { data: order, error: orderError } = await supabase
       .from("orders")
@@ -178,7 +222,7 @@ router.post("/", async (req, res, next) => {
     if (itemsError) throw itemsError;
 
     for (const item of normalizedItems) {
-      if (orderType === "return") continue;
+      if (orderType === "return" || orderType === "refill") continue;
       const { data: inventory, error: inventoryError } = await supabase
         .from("inventory")
         .select("id, quantity_available")
