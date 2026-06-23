@@ -35,7 +35,7 @@ create table if not exists public.orders (
   user_id uuid not null references public.users(id) on delete cascade,
   address_id uuid references public.addresses(id) on delete set null,
   status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Out for Delivery', 'Delivered', 'Out for Return', 'Picked Up', 'Cancelled')),
-  order_type text not null default 'delivery' check (order_type in ('delivery', 'return', 'refill')),
+  type text not null default 'regular' check (type in ('regular', 'refill', 'return')),
   total_amount numeric(10, 2) not null,
   delivery_date date,
   created_at timestamptz not null default now()
@@ -106,14 +106,14 @@ alter table public.transactions enable row level security;
 create policy "Products are viewable by everyone" on public.products for select using (is_active = true);
 create policy "Inventory is viewable by authenticated users" on public.inventory for select to authenticated using (true);
 
-create policy "Users can view own profile" on public.users for select to authenticated using (id = auth.uid());
-create policy "Users can update own profile" on public.users for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+create policy "Users can view own profile" on public.users for select to authenticated using (id = (select auth.uid()));
+create policy "Users can update own profile" on public.users for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
-create policy "Users can manage own addresses" on public.addresses for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "Users can manage own orders" on public.orders for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "Users can manage own addresses" on public.addresses for all to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy "Users can manage own orders" on public.orders for all to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 create policy "Users can view own order items" on public.order_items for select to authenticated using (
-  exists (select 1 from public.orders where orders.id = order_items.order_id and orders.user_id = auth.uid())
+  exists (select 1 from public.orders where orders.id = order_items.order_id and orders.user_id = (select auth.uid()))
 );
-create policy "Users can manage own subscriptions" on public.subscriptions for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "Users can view own payments" on public.payments for select to authenticated using (user_id = auth.uid());
-create policy "Users can view own transactions" on public.transactions for select to authenticated using (user_id = auth.uid());
+create policy "Users can manage own subscriptions" on public.subscriptions for all to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy "Users can view own payments" on public.payments for select to authenticated using (user_id = (select auth.uid()));
+create policy "Users can view own transactions" on public.transactions for select to authenticated using (user_id = (select auth.uid()));

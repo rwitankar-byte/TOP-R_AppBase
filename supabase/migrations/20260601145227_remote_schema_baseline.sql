@@ -1,0 +1,1 @@
+-- Remote migration history placeholder. The initial production schema was applied before this repository adopted Supabase CLI migrations.

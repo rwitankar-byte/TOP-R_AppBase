@@ -178,6 +178,7 @@ router.post("/", async (req, res, next) => {
     console.log("POST /orders body:", JSON.stringify(req.body));
     const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id, subscription_id } = req.body;
     const orderType = ["delivery", "return", "refill"].includes(type) ? type : "delivery";
+    const storedOrderType = orderType === "delivery" ? "regular" : orderType;
     if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
       return res.status(400).json({ error: "user_id, address_id, and items are required" });
     }
@@ -230,7 +231,7 @@ router.post("/", async (req, res, next) => {
       total_amount: orderTotal,
       delivery_date,
       status: "Placed",
-      order_type: orderType,
+      type: storedOrderType,
       subscription_id: ["refill", "return"].includes(orderType) ? subscription_id : null
     };
     let { data: order, error: orderError } = await supabase
@@ -238,9 +239,9 @@ router.post("/", async (req, res, next) => {
       .insert(orderPayload)
       .select()
       .single();
-    if (orderError?.message?.includes("order_type")) {
-      const { order_type, ...fallbackPayload } = orderPayload;
-      const fallback = await supabase.from("orders").insert({ ...fallbackPayload, type: orderType }).select().single();
+    if (orderError?.message?.includes("type")) {
+      const { type, ...fallbackPayload } = orderPayload;
+      const fallback = await supabase.from("orders").insert({ ...fallbackPayload, order_type: orderType }).select().single();
       order = fallback.data;
       orderError = fallback.error;
     }
@@ -329,17 +330,27 @@ router.patch("/:id/status", requireAdmin, async (req, res, next) => {
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: "status is required" });
     const supabase = requireSupabase();
-    const { data: existingOrder, error: existingOrderError } = await supabase
+    let { data: existingOrder, error: existingOrderError } = await supabase
       .from("orders")
-      .select("id,status,order_type")
+      .select("id,status,type")
       .eq("id", req.params.id)
       .single();
+    if (existingOrderError?.message?.includes("type")) {
+      const fallback = await supabase
+        .from("orders")
+        .select("id,status,order_type")
+        .eq("id", req.params.id)
+        .single();
+      existingOrder = fallback.data;
+      existingOrderError = fallback.error;
+    }
     if (existingOrderError) throw existingOrderError;
 
-    if (existingOrder.order_type === "return") {
+    const existingOrderType = existingOrder.type || existingOrder.order_type;
+    if (existingOrderType === "return") {
       return res.status(400).json({ error: "Use the staged return action to update a return request" });
     }
-    assertValidStatusTransition(existingOrder.status, status, existingOrder.order_type);
+    assertValidStatusTransition(existingOrder.status, status, existingOrderType);
 
     const { data, error } = await supabase
       .from("orders")

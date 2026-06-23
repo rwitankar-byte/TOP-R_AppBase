@@ -1,0 +1,1 @@
+-- Remote migration history placeholder. The original subscription and push-token updates were applied before this repository adopted Supabase CLI migrations.
