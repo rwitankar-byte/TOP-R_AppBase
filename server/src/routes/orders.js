@@ -6,6 +6,24 @@ import { requireAdmin } from "../middleware/admin.js";
 const router = Router();
 const expo = new Expo();
 
+export const VALID_TRANSITIONS = {
+  Placed: ["Confirmed", "Cancelled"],
+  Confirmed: ["Out for Delivery", "Cancelled"],
+  "Out for Delivery": ["Delivered", "Cancelled"],
+  Delivered: [],
+  Cancelled: []
+};
+
+export function assertValidStatusTransition(currentStatus, newStatus) {
+  const allowedStatuses = VALID_TRANSITIONS[currentStatus] || [];
+  if (allowedStatuses.includes(newStatus)) return;
+
+  const finalStateMessage = allowedStatuses.length === 0 ? " Order is in a final state." : "";
+  const error = new Error(`Cannot change status from ${currentStatus} to ${newStatus}.${finalStateMessage}`);
+  error.status = 400;
+  throw error;
+}
+
 export function validateRefillItems({ subscription, userId, items }) {
   if (subscription.user_id !== userId || subscription.status !== "Active") {
     const error = new Error("Refills require an active subscription owned by this customer");
@@ -283,7 +301,17 @@ router.patch("/:id/status", requireAdmin, async (req, res, next) => {
   try {
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: "status is required" });
-    const { data, error } = await requireSupabase()
+    const supabase = requireSupabase();
+    const { data: existingOrder, error: existingOrderError } = await supabase
+      .from("orders")
+      .select("id,status")
+      .eq("id", req.params.id)
+      .single();
+    if (existingOrderError) throw existingOrderError;
+
+    assertValidStatusTransition(existingOrder.status, status);
+
+    const { data, error } = await supabase
       .from("orders")
       .update({ status })
       .eq("id", req.params.id)

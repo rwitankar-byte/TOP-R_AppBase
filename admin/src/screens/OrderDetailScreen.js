@@ -5,17 +5,26 @@ import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId, statusClass } from "../utils/format";
 
-const statusActions = [
-  ["Confirm", "Confirmed"],
-  ["Out for Delivery", "Out for Delivery"],
-  ["Delivered", "Delivered"],
-  ["Cancel", "Cancelled"]
-];
+const VALID_TRANSITIONS = {
+  Placed: ["Confirmed", "Cancelled"],
+  Confirmed: ["Out for Delivery", "Cancelled"],
+  "Out for Delivery": ["Delivered", "Cancelled"],
+  Delivered: [],
+  Cancelled: []
+};
+
+const statusLabels = {
+  Confirmed: "Confirm",
+  "Out for Delivery": "Out for Delivery",
+  Delivered: "Delivered",
+  Cancelled: "Cancel"
+};
 
 export default function OrderDetailScreen({ navigation, route }) {
   const [order, setOrder] = useState(route.params.order);
   const [saving, setSaving] = useState(false);
   const isRefill = order.order_type === "refill" || order.type === "refill";
+  const nextStatuses = VALID_TRANSITIONS[order.status] || [];
 
   const updateStatus = async (status) => {
     setSaving(true);
@@ -58,17 +67,27 @@ export default function OrderDetailScreen({ navigation, route }) {
           </View>
         ))}
 
-        <Text className="text-ink font-extrabold text-lg mt-4 mb-3">Update status</Text>
-        {statusActions.map(([label, status]) => (
-          <TouchableOpacity
-            key={status}
-            className={`rounded-lg py-4 items-center mb-3 ${status === "Cancelled" ? "bg-red-500" : "bg-primary"}`}
-            onPress={() => updateStatus(status)}
-            disabled={saving}
-          >
-            <Text className="text-white font-extrabold">{label}</Text>
-          </TouchableOpacity>
-        ))}
+        {nextStatuses.length ? (
+          <>
+            <Text className="text-ink font-extrabold text-lg mt-4 mb-3">Update status</Text>
+            {nextStatuses.map((status) => (
+              <TouchableOpacity
+                key={status}
+                className={`rounded-lg py-4 items-center mb-3 ${status === "Cancelled" ? "bg-red-500" : "bg-primary"}`}
+                onPress={() => updateStatus(status)}
+                disabled={saving}
+              >
+                <Text className="text-white font-extrabold">{statusLabels[status]}</Text>
+              </TouchableOpacity>
+            ))}
+          </>
+        ) : (
+          <View className="bg-gray-100 rounded-lg p-4 mt-4 mb-3">
+            <Text className="text-muted font-bold">
+              {order.status === "Delivered" ? "Order Delivered - No further action possible" : "Order Cancelled - No further action possible"}
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
