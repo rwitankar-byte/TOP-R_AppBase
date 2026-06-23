@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
@@ -20,18 +20,39 @@ function formatDescription(payment) {
 export default function TransactionHistoryScreen() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadPayments = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
+    try {
+      const session = await getOrCreateMockSession();
+      setPayments(await api.getPayments(session.user.id));
+    } catch (error) {
+      Alert.alert("Transaction History", error.message);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getOrCreateMockSession()
-      .then((session) => api.getPayments(session.user.id))
-      .then(setPayments)
-      .catch((error) => Alert.alert("Transaction History", error.message))
-      .finally(() => setLoading(false));
-  }, []);
+    loadPayments();
+  }, [loadPayments]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadPayments({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <Text className="text-ink text-2xl font-extrabold my-4">Transaction History</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && payments.length === 0 && <Text className="text-muted">No transactions yet.</Text>}

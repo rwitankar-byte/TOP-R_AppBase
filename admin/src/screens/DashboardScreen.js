@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
@@ -23,30 +23,51 @@ export default function DashboardScreen({ navigation, onLogout }) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const isFocused = useIsFocused();
+  const inFlightRequest = useRef(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async ({ showLoading = true, silent = false } = {}) => {
+    if (inFlightRequest.current) return inFlightRequest.current;
+    const request = (async () => {
+      if (showLoading) setLoading(true);
+      try {
+        const [orderData, returnData, subscriptionData, inventoryData] = await Promise.all([
+          api.getOrders(),
+          api.getReturnRequests(),
+          api.getSubscriptions("Active"),
+          api.getInventory()
+        ]);
+        setOrders(orderData);
+        setReturnRequests(returnData);
+        setSubscriptions(subscriptionData);
+        setInventory(inventoryData);
+      } catch (error) {
+        if (!silent) Alert.alert("Dashboard", error.message);
+      } finally {
+        if (showLoading) setLoading(false);
+        inFlightRequest.current = null;
+      }
+    })();
+    inFlightRequest.current = request;
+    return request;
+  }, []);
+
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    loadData();
+    const interval = setInterval(() => loadData({ showLoading: false, silent: true }), 15000);
+    return () => clearInterval(interval);
+  }, [isFocused, loadData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
     try {
-      const [orderData, returnData, subscriptionData, inventoryData] = await Promise.all([
-        api.getOrders(),
-        api.getReturnRequests(),
-        api.getSubscriptions("Active"),
-        api.getInventory()
-      ]);
-      setOrders(orderData);
-      setReturnRequests(returnData);
-      setSubscriptions(subscriptionData);
-      setInventory(inventoryData);
-    } catch (error) {
-      Alert.alert("Dashboard", error.message);
+      await loadData({ showLoading: false });
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
-
-  useFocusEffect(useCallback(() => {
-    loadData();
-  }, []));
 
   const today = new Date().toISOString().slice(0, 10);
   const todaysOrders = orders.filter((order) => order.created_at?.slice(0, 10) === today).length;
@@ -55,7 +76,10 @@ export default function DashboardScreen({ navigation, onLogout }) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <ScreenHeader title="Dashboard" subtitle="TOP-R Water operations" rightAction={onLogout} rightIcon="log-out" />
         {loading ? (
           <ActivityIndicator color="#00B5B0" />

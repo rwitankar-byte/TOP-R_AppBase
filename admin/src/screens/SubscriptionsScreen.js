@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
@@ -12,15 +12,16 @@ export default function SubscriptionsScreen({ navigation }) {
   const [subscriptions, setSubscriptions] = useState([]);
   const [filter, setFilter] = useState("Active");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadSubscriptions = async () => {
-    setLoading(true);
+  const loadSubscriptions = async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       setSubscriptions(await api.getSubscriptions(filter));
     } catch (error) {
       Alert.alert("Subscriptions", error.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -28,9 +29,21 @@ export default function SubscriptionsScreen({ navigation }) {
     loadSubscriptions();
   }, [filter]));
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadSubscriptions({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <ScreenHeader title="Subscriptions" subtitle="Customer jar ownership" rightAction={loadSubscriptions} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           {filters.map((item) => (

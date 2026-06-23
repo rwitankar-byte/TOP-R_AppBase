@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
@@ -10,10 +10,11 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
   const [returnOrders, setReturnOrders] = useState([]);
   const [refillOrders, setRefillOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadDetails = async () => {
-    setLoading(true);
+  const loadDetails = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       const [returns, refills] = await Promise.all([api.getReturnRequests(), api.getSubscriptionRefills(subscription.id)]);
       setReturnOrders(
@@ -27,13 +28,22 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
     } catch (error) {
       Alert.alert("Subscription details", error.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, [subscription.id, subscription.user_id]);
 
   useEffect(() => {
     loadDetails();
-  }, [subscription.id]);
+  }, [loadDetails]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadDetails({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const approveReturn = async (order) => {
     const jarCount = Number(order?.jar_count || subscription.jar_count || subscription.quantity || 1);
@@ -57,7 +67,10 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <ScreenHeader title="Subscription Detail" subtitle={shortId(subscription.id)} onBack={navigation.goBack} />
         <View className="border border-gray-100 rounded-lg p-4 mb-4">
           <View className="flex-row justify-between items-center">

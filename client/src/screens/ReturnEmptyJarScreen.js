@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
@@ -9,9 +9,10 @@ export default function ReturnEmptyJarScreen() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [pendingReturns, setPendingReturns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadReturnData = async () => {
-    setLoading(true);
+  const loadReturnData = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
@@ -24,13 +25,22 @@ export default function ReturnEmptyJarScreen() {
     } catch (error) {
       Alert.alert("Return Empty Jar", error.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadReturnData();
-  }, []);
+  }, [loadReturnData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadReturnData({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const findPendingReturn = (subscription) =>
     pendingReturns.find(
@@ -76,7 +86,10 @@ export default function ReturnEmptyJarScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <Text className="text-ink text-2xl font-extrabold my-4">Return Empty Jar</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && subscriptions.length === 0 && <Text className="text-muted">No active subscriptions with jars.</Text>}

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
@@ -20,22 +20,32 @@ function getReturnPayload(order) {
 export default function ReturnRequestsScreen({ navigation }) {
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
 
-  const loadReturns = async () => {
-    setLoading(true);
+  const loadReturns = async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       setReturns(await api.getReturnRequests());
     } catch (error) {
       Alert.alert("Return Requests", error.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useFocusEffect(useCallback(() => {
     loadReturns();
   }, []));
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadReturns({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const approve = async (order) => {
     setApprovingId(order.id);
@@ -52,7 +62,10 @@ export default function ReturnRequestsScreen({ navigation }) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <ScreenHeader title="Return Requests" subtitle="Pending jar pickups" onBack={navigation.goBack} rightAction={loadReturns} />
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && returns.length === 0 && <Text className="text-muted">No pending returns.</Text>}

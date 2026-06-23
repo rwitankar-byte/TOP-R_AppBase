@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
@@ -15,18 +15,39 @@ const statusClasses = {
 export default function AllOrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadOrders = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
+    try {
+      const session = await getOrCreateMockSession();
+      setOrders(await api.getOrders(session.user.id));
+    } catch (error) {
+      Alert.alert("All Orders", error.message);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getOrCreateMockSession()
-      .then((session) => api.getOrders(session.user.id))
-      .then(setOrders)
-      .catch((error) => Alert.alert("All Orders", error.message))
-      .finally(() => setLoading(false));
-  }, []);
+    loadOrders();
+  }, [loadOrders]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadOrders({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <Text className="text-ink text-2xl font-extrabold my-4">All Orders</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && orders.length === 0 && <Text className="text-muted">No orders yet.</Text>}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
@@ -30,14 +30,33 @@ export default function OrderCalendarScreen() {
   const [orders, setOrders] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadOrders = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
+    try {
+      const session = await getOrCreateMockSession();
+      const orderData = await api.getOrders(session.user.id);
+      setOrders(orderData.filter(isJarOrder));
+    } catch (error) {
+      Alert.alert("Order Calendar", error.message);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getOrCreateMockSession()
-      .then((session) => api.getOrders(session.user.id))
-      .then((orderData) => setOrders(orderData.filter(isJarOrder)))
-      .catch((error) => Alert.alert("Order Calendar", error.message))
-      .finally(() => setLoading(false));
-  }, []);
+    loadOrders();
+  }, [loadOrders]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadOrders({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const markedDates = useMemo(() => {
     const marks = orders.reduce((dates, order) => {
@@ -68,7 +87,10 @@ export default function OrderCalendarScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <Text className="text-ink text-2xl font-extrabold my-4">Order Calendar</Text>
         {loading ? (
           <ActivityIndicator color="#00B5B0" />

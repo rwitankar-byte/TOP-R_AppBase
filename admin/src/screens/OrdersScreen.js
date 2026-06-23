@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
@@ -22,15 +22,16 @@ export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadOrders = async () => {
-    setLoading(true);
+  const loadOrders = async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       setOrders(await api.getOrders(filter));
     } catch (error) {
       Alert.alert("Orders", error.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -38,11 +39,23 @@ export default function OrdersScreen({ navigation }) {
     loadOrders();
   }, [filter]));
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadOrders({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const filteredOrders = useMemo(() => orders, [orders]);
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <ScreenHeader title="Orders" subtitle="All customer orders" rightAction={loadOrders} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           {filters.map((item) => (

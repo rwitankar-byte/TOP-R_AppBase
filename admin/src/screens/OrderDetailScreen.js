@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useIsFocused } from "@react-navigation/native";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId, statusClass } from "../utils/format";
@@ -23,8 +24,44 @@ const statusLabels = {
 export default function OrderDetailScreen({ navigation, route }) {
   const [order, setOrder] = useState(route.params.order);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const isFocused = useIsFocused();
+  const inFlightRequest = useRef(null);
   const isRefill = order.order_type === "refill" || order.type === "refill";
   const nextStatuses = VALID_TRANSITIONS[order.status] || [];
+
+  const loadOrder = useCallback(async ({ silent = false } = {}) => {
+    if (inFlightRequest.current) return inFlightRequest.current;
+    const request = (async () => {
+      try {
+        const orders = await api.getOrders();
+        const updatedOrder = orders.find((item) => item.id === route.params.order.id);
+        if (updatedOrder) setOrder(updatedOrder);
+      } catch (error) {
+        if (!silent) Alert.alert("Order detail", error.message);
+      } finally {
+        inFlightRequest.current = null;
+      }
+    })();
+    inFlightRequest.current = request;
+    return request;
+  }, [route.params.order.id]);
+
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    loadOrder();
+    const interval = setInterval(() => loadOrder({ silent: true }), 15000);
+    return () => clearInterval(interval);
+  }, [isFocused, loadOrder]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadOrder();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const updateStatus = async (status) => {
     setSaving(true);
@@ -41,7 +78,10 @@ export default function OrderDetailScreen({ navigation, route }) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <ScreenHeader title="Order Detail" subtitle={shortId(order.id)} onBack={navigation.goBack} />
         <View className="border border-gray-100 rounded-lg p-4 mb-4">
           <View className="flex-row justify-between items-center mb-3">

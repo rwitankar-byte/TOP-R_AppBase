@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
@@ -33,6 +33,7 @@ export default function SubscriptionsScreen({ navigation }) {
   const [refillQuantities, setRefillQuantities] = useState({});
   const [openRefillId, setOpenRefillId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const jars = Math.max(1, Number(jarCount || 1));
@@ -44,8 +45,8 @@ export default function SubscriptionsScreen({ navigation }) {
     [products, selectedProductId]
   );
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
@@ -59,17 +60,22 @@ export default function SubscriptionsScreen({ navigation }) {
     } catch (error) {
       Alert.alert("Subscriptions", error.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
   }, []);
 
   useFocusEffect(useCallback(() => {
     loadData();
-  }, []));
+  }, [loadData]));
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadData({ showLoading: false });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const createSubscription = async () => {
     if (!selectedProduct?.id) {
@@ -149,7 +155,10 @@ export default function SubscriptionsScreen({ navigation }) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="px-4">
+      <ScrollView
+        className="px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
+      >
         <Text className="text-ink text-2xl font-extrabold my-4">Subscriptions</Text>
         <Text className="text-ink font-extrabold text-lg mb-3">New Subscription</Text>
         <View className="border border-gray-100 rounded-lg p-4 mb-5">
