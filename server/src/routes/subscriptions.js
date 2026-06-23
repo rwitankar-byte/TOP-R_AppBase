@@ -127,50 +127,8 @@ router.patch("/:id", async (req, res, next) => {
       updates.water_charge_per_delivery = jars * WATER_CHARGE;
     }
 
-    const wantsRefund =
-      updates.status === "Cancelled" &&
-      (req.body.jars_returned === true || req.body.return_jars === true || req.body.confirm_return === true);
-
-    let existingSubscription = null;
-    if (updates.status === "Active" || wantsRefund) {
-      const { data: subscription, error: subscriptionError } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("id", req.params.id)
-        .single();
-      if (subscriptionError) throw subscriptionError;
-      existingSubscription = subscription;
-    }
-
-    if (wantsRefund) {
-      const subscription = existingSubscription;
-
-      const refundAmount = Number(subscription.jar_deposit || Number(subscription.jar_count || subscription.quantity || 1) * JAR_DEPOSIT);
-      updates.deposit_refunded = true;
-
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .select("wallet_balance")
-        .eq("id", subscription.user_id)
-        .single();
-      if (userError) throw userError;
-
-      if (!subscription.deposit_refunded && refundAmount > 0) {
-        const walletBalance = Number(user.wallet_balance || 0) + refundAmount;
-        const { error: walletError } = await supabase
-          .from("users")
-          .update({ wallet_balance: walletBalance })
-          .eq("id", subscription.user_id);
-        if (walletError) throw walletError;
-
-        const { error: transactionError } = await supabase.from("transactions").insert({
-          user_id: subscription.user_id,
-          type: "Wallet Refund",
-          amount: refundAmount,
-          description: `Refunded jar deposit for ${subscription.jar_count || subscription.quantity || 1} returned jar(s)`
-        });
-        if (transactionError) throw transactionError;
-      }
+    if (["Return Requested", "Return Confirmed", "Cancelled"].includes(updates.status)) {
+      return res.status(400).json({ error: "Return statuses are managed through the return request flow" });
     }
 
     const { data, error } = await supabase

@@ -2,27 +2,12 @@ import { Router } from "express";
 import { Expo } from "expo-server-sdk";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
+import { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransition } from "../utils/orderStatuses.js";
 
 const router = Router();
 const expo = new Expo();
 
-export const VALID_TRANSITIONS = {
-  Placed: ["Confirmed", "Cancelled"],
-  Confirmed: ["Out for Delivery", "Cancelled"],
-  "Out for Delivery": ["Delivered", "Cancelled"],
-  Delivered: [],
-  Cancelled: []
-};
-
-export function assertValidStatusTransition(currentStatus, newStatus) {
-  const allowedStatuses = VALID_TRANSITIONS[currentStatus] || [];
-  if (allowedStatuses.includes(newStatus)) return;
-
-  const finalStateMessage = allowedStatuses.length === 0 ? " Order is in a final state." : "";
-  const error = new Error(`Cannot change status from ${currentStatus} to ${newStatus}.${finalStateMessage}`);
-  error.status = 400;
-  throw error;
-}
+export { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransition };
 
 export function validateRefillItems({ subscription, userId, items }) {
   if (subscription.user_id !== userId || subscription.status !== "Active") {
@@ -45,6 +30,21 @@ export function validateRefillItems({ subscription, userId, items }) {
   }
 
   return items.map((item) => ({ ...item, unit_price: 40 }));
+}
+
+export function validateReturnRequest({ subscription, userId, items }) {
+  if (subscription.user_id !== userId || subscription.status !== "Active" || subscription.deposit_refunded) {
+    const error = new Error("Return requests require an active subscription owned by this customer");
+    error.status = 400;
+    throw error;
+  }
+  const returnedJars = items.reduce((sum, item) => sum + item.quantity, 0);
+  const subscribedJars = Number(subscription.jar_count || subscription.quantity || 0);
+  if (returnedJars !== subscribedJars || items.some((item) => item.product_id !== subscription.product_id)) {
+    const error = new Error("A return request must include every jar from the matching subscription");
+    error.status = 400;
+    throw error;
+  }
 }
 
 function applyOrderFilters(query, req) {
@@ -120,16 +120,18 @@ async function attachSubscriptionsToReturns(returnOrders) {
 
   return returnOrders.map((order) => {
     const firstItem = order.order_items?.[0];
-    const subscription = (subscriptions || []).find(
-      (item) =>
-        item.user_id === order.user_id &&
-        (!firstItem?.product_id || item.product_id === firstItem.product_id) &&
-        item.deposit_refunded !== true
-    );
+    const subscription =
+      (subscriptions || []).find((item) => item.id === order.subscription_id) ||
+      (subscriptions || []).find(
+        (item) =>
+          item.user_id === order.user_id &&
+          (!firstItem?.product_id || item.product_id === firstItem.product_id) &&
+          item.deposit_refunded !== true
+      );
     return {
       ...order,
       subscription,
-      subscription_id: subscription?.id || null,
+      subscription_id: order.subscription_id || subscription?.id || null,
       jar_count: subscription?.jar_count || subscription?.quantity || firstItem?.quantity || 1
     };
   });
@@ -191,6 +193,21 @@ router.post("/", async (req, res, next) => {
       return res.status(400).json({ error: "Each item requires product_id, quantity, and unit_price" });
     }
 
+    let returnSubscription = null;
+    if (orderType === "return") {
+      if (!subscription_id) {
+        return res.status(400).json({ error: "subscription_id is required for return requests" });
+      }
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .select("id,user_id,product_id,jar_count,quantity,status,deposit_refunded")
+        .eq("id", subscription_id)
+        .single();
+      if (subscriptionError) throw subscriptionError;
+      validateReturnRequest({ subscription, userId: user_id, items: normalizedItems });
+      returnSubscription = subscription;
+    }
+
     if (orderType === "refill") {
       if (!subscription_id) {
         return res.status(400).json({ error: "subscription_id is required for refill orders" });
@@ -214,7 +231,7 @@ router.post("/", async (req, res, next) => {
       delivery_date,
       status: "Placed",
       order_type: orderType,
-      subscription_id: orderType === "refill" ? subscription_id : null
+      subscription_id: ["refill", "return"].includes(orderType) ? subscription_id : null
     };
     let { data: order, error: orderError } = await supabase
       .from("orders")
@@ -238,6 +255,15 @@ router.post("/", async (req, res, next) => {
     }));
     const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
     if (itemsError) throw itemsError;
+
+    if (returnSubscription) {
+      const { error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .update({ status: "Return Requested" })
+        .eq("id", returnSubscription.id)
+        .eq("status", "Active");
+      if (subscriptionError) throw subscriptionError;
+    }
 
     for (const item of normalizedItems) {
       if (orderType === "return" || orderType === "refill") continue;
@@ -282,8 +308,9 @@ router.get("/", requireAdmin, async (req, res, next) => {
 
 router.get("/returns", requireAdmin, async (req, res, next) => {
   try {
-    const returns = await fetchOrders(req, { returnsOnly: true, pendingOnly: true });
-    res.json(await attachSubscriptionsToReturns(returns));
+    const returns = await fetchOrders(req, { returnsOnly: true });
+    const activeReturns = returns.filter((order) => !["Picked Up", "Cancelled"].includes(order.status));
+    res.json(await attachSubscriptionsToReturns(activeReturns));
   } catch (error) {
     next(error);
   }
@@ -304,12 +331,15 @@ router.patch("/:id/status", requireAdmin, async (req, res, next) => {
     const supabase = requireSupabase();
     const { data: existingOrder, error: existingOrderError } = await supabase
       .from("orders")
-      .select("id,status")
+      .select("id,status,order_type")
       .eq("id", req.params.id)
       .single();
     if (existingOrderError) throw existingOrderError;
 
-    assertValidStatusTransition(existingOrder.status, status);
+    if (existingOrder.order_type === "return") {
+      return res.status(400).json({ error: "Use the staged return action to update a return request" });
+    }
+    assertValidStatusTransition(existingOrder.status, status, existingOrder.order_type);
 
     const { data, error } = await supabase
       .from("orders")

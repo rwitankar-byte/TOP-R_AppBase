@@ -5,23 +5,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId } from "../utils/format";
-
-function getReturnPayload(order) {
-  const subscription = order.subscription;
-  const jarCount = Number(order.jar_count || subscription?.jar_count || subscription?.quantity || order.order_items?.[0]?.quantity || 1);
-  return {
-    order_id: order.id,
-    subscription_id: order.subscription_id || subscription?.id,
-    user_id: order.user_id,
-    jar_count: jarCount
-  };
-}
+import { getReturnActions } from "../utils/returnStatus";
 
 export default function ReturnRequestsScreen({ navigation }) {
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [approvingId, setApprovingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
 
   const loadReturns = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
@@ -47,48 +37,56 @@ export default function ReturnRequestsScreen({ navigation }) {
     }
   };
 
-  const approve = async (order) => {
-    setApprovingId(order.id);
+  const advanceReturn = async (order, targetStatus) => {
+    setUpdatingId(order.id);
     try {
-      const result = await api.approveReturn(getReturnPayload(order));
-      setReturns((current) => current.filter((item) => item.id !== order.id));
-      Alert.alert("Return approved", `Refund of ${money(result.refund_amount)} credited to customer wallet.`);
+      const result = await api.advanceReturn(order.id, targetStatus);
+      if (targetStatus === "Picked Up") {
+        Alert.alert("Return picked up", `Refund ${money(result.refund_amount)} via Cash on Delivery - paid by delivery boy.`);
+      } else if (targetStatus === "Cancelled") {
+        Alert.alert("Return rejected", "The subscription remains Active.");
+      } else {
+        Alert.alert("Return updated", `Return request is now ${targetStatus}.`);
+      }
+      await loadReturns({ showLoading: false });
     } catch (error) {
-      Alert.alert("Approve return failed", error.message);
+      Alert.alert("Return update failed", error.message);
     } finally {
-      setApprovingId(null);
+      setUpdatingId(null);
     }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView
-        className="px-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
-      >
+      <ScrollView className="px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}>
         <ScreenHeader title="Return Requests" subtitle="Pending jar pickups" onBack={navigation.goBack} rightAction={loadReturns} />
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && returns.length === 0 && <Text className="text-muted">No pending returns.</Text>}
         {returns.map((order) => {
           const subscription = order.subscription;
           const jarCount = Number(order.jar_count || subscription?.jar_count || subscription?.quantity || order.order_items?.[0]?.quantity || 1);
+          const actions = getReturnActions(order.status);
           return (
             <View key={order.id} className="border border-gray-100 rounded-lg p-4 mb-3">
               <View className="flex-row justify-between">
                 <Text className="text-ink font-extrabold">{shortId(order.id)}</Text>
                 <Text className="text-primary font-extrabold">{money(jarCount * 250)}</Text>
               </View>
-              <Text className="text-muted mt-2">Customer: {order.users?.phone || "Unknown"}</Text>
+              <Text className="text-muted mt-2">Status: {order.status}</Text>
+              <Text className="text-muted mt-1">Customer: {order.users?.phone || "Unknown"}</Text>
               <Text className="text-muted mt-1">Product: {subscription?.products?.name || order.order_items?.[0]?.products?.name || "Water Jar"}</Text>
               <Text className="text-muted mt-1">Jars: {jarCount}</Text>
               <Text className="text-muted mt-1">Date: {dateTime(order.created_at)}</Text>
-              <TouchableOpacity
-                className="bg-primary rounded-lg py-3 items-center mt-4"
-                onPress={() => approve(order)}
-                disabled={approvingId === order.id}
-              >
-                <Text className="text-white font-extrabold">{approvingId === order.id ? "Approving..." : "Approve"}</Text>
-              </TouchableOpacity>
+              {actions.map((action) => (
+                <TouchableOpacity
+                  key={action.status}
+                  className={`rounded-lg py-3 items-center mt-3 ${action.destructive ? "bg-red-500" : "bg-primary"}`}
+                  onPress={() => advanceReturn(order, action.status)}
+                  disabled={updatingId === order.id}
+                >
+                  <Text className="text-white font-extrabold">{updatingId === order.id ? "Updating..." : action.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           );
         })}

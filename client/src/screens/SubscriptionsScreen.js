@@ -120,12 +120,29 @@ export default function SubscriptionsScreen({ navigation }) {
 
   const confirmCancel = (subscription) => {
     const refund = Number(subscription.jar_deposit || subscription.jar_count * JAR_DEPOSIT);
-    Alert.alert("Cancel subscription", `Return jars to get ₹${refund} refund to your wallet.`, [
+    Alert.alert("Cancel subscription", `Request a jar pickup for a ₹${refund} COD refund paid by the delivery boy.`, [
       { text: "Keep Active", style: "cancel" },
       {
-        text: "Confirm Return",
+        text: "Request Return",
         style: "destructive",
-        onPress: () => updateSubscription(subscription.id, { status: "Cancelled", jars_returned: true })
+        onPress: async () => {
+          try {
+            const activeSession = session?.user?.id ? session : await getOrCreateMockSession();
+            await api.placeOrder({
+              type: "return",
+              user_id: activeSession.user.id,
+              address_id: subscription.address_id,
+              subscription_id: subscription.id,
+              total_amount: 0,
+              delivery_date: new Date().toISOString().slice(0, 10),
+              items: [{ product_id: subscription.product_id, quantity: Number(subscription.jar_count || subscription.quantity || 1), unit_price: 0 }]
+            });
+            Alert.alert("Return request sent", "Admin will confirm pickup soon.");
+            await loadData();
+          } catch (error) {
+            Alert.alert("Return request failed", error.message);
+          }
+        }
       }
     ]);
   };

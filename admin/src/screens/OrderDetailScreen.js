@@ -5,6 +5,7 @@ import { useIsFocused } from "@react-navigation/native";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId, statusClass } from "../utils/format";
+import { getReturnActions } from "../utils/returnStatus";
 
 const VALID_TRANSITIONS = {
   Placed: ["Confirmed", "Cancelled"],
@@ -28,7 +29,8 @@ export default function OrderDetailScreen({ navigation, route }) {
   const isFocused = useIsFocused();
   const inFlightRequest = useRef(null);
   const isRefill = order.order_type === "refill" || order.type === "refill";
-  const nextStatuses = VALID_TRANSITIONS[order.status] || [];
+  const isReturn = order.order_type === "return" || order.type === "return";
+  const nextStatuses = isReturn ? getReturnActions(order.status) : (VALID_TRANSITIONS[order.status] || []).map((status) => ({ status, label: statusLabels[status], destructive: status === "Cancelled" }));
 
   const loadOrder = useCallback(async ({ silent = false } = {}) => {
     if (inFlightRequest.current) return inFlightRequest.current;
@@ -66,9 +68,14 @@ export default function OrderDetailScreen({ navigation, route }) {
   const updateStatus = async (status) => {
     setSaving(true);
     try {
-      const updatedOrder = await api.updateOrderStatus(order.id, status);
+      const result = isReturn ? await api.advanceReturn(order.id, status) : await api.updateOrderStatus(order.id, status);
+      const updatedOrder = isReturn ? result.order : result;
       setOrder((current) => ({ ...current, ...updatedOrder }));
-      Alert.alert("Order updated", `Status changed to ${status}.`);
+      if (isReturn && status === "Picked Up") {
+        Alert.alert("Return picked up", `Refund ${money(result.refund_amount)} via Cash on Delivery - paid by delivery boy.`);
+      } else {
+        Alert.alert("Order updated", `Status changed to ${status}.`);
+      }
     } catch (error) {
       Alert.alert("Order update failed", error.message);
     } finally {
@@ -110,21 +117,21 @@ export default function OrderDetailScreen({ navigation, route }) {
         {nextStatuses.length ? (
           <>
             <Text className="text-ink font-extrabold text-lg mt-4 mb-3">Update status</Text>
-            {nextStatuses.map((status) => (
+            {nextStatuses.map((action) => (
               <TouchableOpacity
-                key={status}
-                className={`rounded-lg py-4 items-center mb-3 ${status === "Cancelled" ? "bg-red-500" : "bg-primary"}`}
-                onPress={() => updateStatus(status)}
+                key={action.status}
+                className={`rounded-lg py-4 items-center mb-3 ${action.destructive ? "bg-red-500" : "bg-primary"}`}
+                onPress={() => updateStatus(action.status)}
                 disabled={saving}
               >
-                <Text className="text-white font-extrabold">{statusLabels[status]}</Text>
+                <Text className="text-white font-extrabold">{action.label}</Text>
               </TouchableOpacity>
             ))}
           </>
         ) : (
           <View className="bg-gray-100 rounded-lg p-4 mt-4 mb-3">
             <Text className="text-muted font-bold">
-              {order.status === "Delivered" ? "Order Delivered - No further action possible" : "Order Cancelled - No further action possible"}
+              {order.status === "Delivered" ? "Order Delivered - No further action possible" : order.status === "Picked Up" ? "Return Picked Up - No further action possible" : "Order Cancelled - No further action possible"}
             </Text>
           </View>
         )}

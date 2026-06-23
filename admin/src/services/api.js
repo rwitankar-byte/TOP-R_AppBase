@@ -36,6 +36,6 @@ export const api = {
       body: JSON.stringify({ quantity_available: quantity })
     }),
   getUsers: () => request("/users"),
-  approveReturn: (payload) =>
-    request("/admin/approve-return", { method: "POST", body: JSON.stringify(payload) })
+  advanceReturn: (orderId, targetStatus) =>
+    request("/admin/approve-return", { method: "POST", body: JSON.stringify({ order_id: orderId, target_status: targetStatus }) })
 };

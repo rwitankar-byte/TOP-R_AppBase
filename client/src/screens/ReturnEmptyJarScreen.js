@@ -17,10 +17,10 @@ export default function ReturnEmptyJarScreen() {
       const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
       const [subscriptionData, returnData] = await Promise.all([
-        api.getSubscriptions(storedSession.user.id, "Active"),
-        api.getOrders(storedSession.user.id, { type: "return", status: "Placed" })
+        api.getSubscriptions(storedSession.user.id),
+        api.getOrders(storedSession.user.id, { type: "return" })
       ]);
-      setSubscriptions(subscriptionData);
+      setSubscriptions(subscriptionData.filter((subscription) => ["Active", "Return Requested", "Return Confirmed"].includes(subscription.status)));
       setPendingReturns(returnData);
     } catch (error) {
       Alert.alert("Return Empty Jar", error.message);
@@ -46,14 +46,20 @@ export default function ReturnEmptyJarScreen() {
     pendingReturns.find(
       (order) =>
         order.user_id === subscription.user_id &&
-        order.status === "Placed" &&
-        order.order_items?.some((item) => item.product_id === subscription.product_id)
+        !["Picked Up", "Cancelled"].includes(order.status) &&
+        (order.subscription_id === subscription.id || order.order_items?.some((item) => item.product_id === subscription.product_id))
     );
+
+  const returnStatusText = (order) => {
+    if (order?.status === "Placed") return "Return Requested - Awaiting Confirmation";
+    if (order?.status === "Confirmed") return "Return Confirmed - Pickup will be scheduled";
+    if (order?.status === "Out for Return") return "Pickup Scheduled - Delivery boy is on the way";
+    return "Return request pending";
+  };
 
   const requestReturn = (subscription) => {
     const jars = Number(subscription.jar_count || subscription.quantity || 1);
     const productName = subscription.products?.name || "Water Jar Subscription";
-    const refund = jars * 250;
     Alert.alert("Return jars", `Return ${jars} jars from ${productName}?`, [
       { text: "Cancel", style: "cancel" },
       {
@@ -64,6 +70,7 @@ export default function ReturnEmptyJarScreen() {
               type: "return",
               user_id: session.user.id,
               address_id: subscription.address_id,
+              subscription_id: subscription.id,
               total_amount: 0,
               delivery_date: new Date().toISOString().slice(0, 10),
               items: [
@@ -74,7 +81,7 @@ export default function ReturnEmptyJarScreen() {
                 }
               ]
             });
-            Alert.alert("Return request placed", `Refund of ₹${refund} will be processed after jar pickup.`);
+            Alert.alert("Return request sent", "Admin will confirm pickup soon.");
             await loadReturnData();
           } catch (error) {
             Alert.alert("Return failed", error.message);
@@ -92,7 +99,7 @@ export default function ReturnEmptyJarScreen() {
       >
         <Text className="text-ink text-2xl font-extrabold my-4">Return Empty Jar</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && subscriptions.length === 0 && <Text className="text-muted">No active subscriptions with jars.</Text>}
+        {!loading && subscriptions.length === 0 && <Text className="text-muted">No subscriptions with jars to return.</Text>}
         {subscriptions.map((subscription) => {
           const jars = Number(subscription.jar_count || subscription.quantity || 1);
           const pendingReturn = findPendingReturn(subscription);
@@ -101,7 +108,7 @@ export default function ReturnEmptyJarScreen() {
               <Text className="font-extrabold text-ink">{subscription.products?.name || "Water Jar Subscription"}</Text>
               <Text className="text-muted mt-1">{jars} jars subscribed</Text>
               {pendingReturn && (
-                <Text className="text-primary font-bold mt-2">Return request pending. Awaiting pickup and approval.</Text>
+                <Text className="text-primary font-bold mt-2">{returnStatusText(pendingReturn)}</Text>
               )}
               <TouchableOpacity
                 className={`rounded-lg py-3 items-center mt-3 ${pendingReturn ? "bg-gray-300" : "bg-primary"}`}
@@ -109,7 +116,7 @@ export default function ReturnEmptyJarScreen() {
                 disabled={Boolean(pendingReturn)}
               >
                 <Text className="text-white font-bold">
-                  {pendingReturn ? "Return Requested - Pending Approval" : "Request Return"}
+                  {pendingReturn ? returnStatusText(pendingReturn) : "Request Return"}
                 </Text>
               </TouchableOpacity>
             </View>
