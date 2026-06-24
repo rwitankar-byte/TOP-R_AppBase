@@ -6,6 +6,7 @@ import { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransitio
 
 const router = Router();
 const expo = new Expo();
+const ACTIONABLE_RETURN_SUBSCRIPTION_STATUSES = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned"];
 
 export { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransition };
 
@@ -327,8 +328,10 @@ router.get("/", requireAdmin, async (req, res, next) => {
 router.get("/returns", requireAdmin, async (req, res, next) => {
   try {
     const returns = await fetchOrders(req, { returnsOnly: true });
-    const activeReturns = returns.filter((order) => order.status !== "Cancelled");
-    res.json(await attachSubscriptionsToReturns(activeReturns));
+    const attachedReturns = await attachSubscriptionsToReturns(returns);
+    res.json(
+      attachedReturns.filter((order) => ACTIONABLE_RETURN_SUBSCRIPTION_STATUSES.includes(order.subscription?.status))
+    );
   } catch (error) {
     next(error);
   }

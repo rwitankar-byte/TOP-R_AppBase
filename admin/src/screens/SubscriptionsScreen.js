@@ -8,7 +8,7 @@ import { dateTime, money, statusClass } from "../utils/format";
 import { getReturnActions } from "../utils/returnStatus";
 
 const activeStatuses = ["Active", "Paused"];
-const returnStatuses = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned", "Refund Completed"];
+const actionableReturnStatuses = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned"];
 
 export default function SubscriptionsScreen({ navigation }) {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -25,7 +25,13 @@ export default function SubscriptionsScreen({ navigation }) {
         api.getReturnRequests()
       ]);
       setSubscriptions(subscriptionData);
-      setReturnOrders(returnData.filter((order) => returnStatuses.includes(order.subscription?.status) || order.status !== "Cancelled"));
+      setReturnOrders(
+        returnData.filter(
+          (order) =>
+            actionableReturnStatuses.includes(order.subscription?.status) &&
+            getReturnActions(order.status).length > 0
+        )
+      );
     } catch (error) {
       Alert.alert("Subscriptions", error.message);
     } finally {
@@ -66,10 +72,7 @@ export default function SubscriptionsScreen({ navigation }) {
   };
 
   const activeSubscriptions = subscriptions.filter((subscription) => activeStatuses.includes(subscription.status));
-  const cancellationRequests = returnOrders.filter((order) => {
-    const status = order.subscription?.status;
-    return returnStatuses.includes(status) || ["Placed", "Confirmed", "Picked Up", "Returned", "Refund Completed"].includes(order.status);
-  });
+  const cancellationRequests = returnOrders;
 
   return (
     <SafeAreaView className="flex-1 bg-white">
