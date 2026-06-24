@@ -6,15 +6,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 
-function SummaryCard({ label, value, tone = "primary" }) {
+function SummaryCard({ label, value, tone = "primary", onPress }) {
   const bg = tone === "alert" ? "bg-red-50 border-red-100" : "bg-wash border-gray-100";
   const text = tone === "alert" ? "text-red-600" : "text-primary";
-  return (
+  const content = (
     <View className={`border ${bg} rounded-lg p-4 flex-1 mx-1 mb-3`}>
       <Text className="text-muted text-xs">{label}</Text>
       <Text className={`${text} text-3xl font-extrabold mt-2`}>{value}</Text>
     </View>
   );
+  return onPress ? <TouchableOpacity className="flex-1" onPress={onPress}>{content}</TouchableOpacity> : content;
 }
 
 export default function DashboardScreen({ navigation, onLogout }) {
@@ -91,7 +92,7 @@ export default function DashboardScreen({ navigation, onLogout }) {
             </View>
             <View className="flex-row">
               <SummaryCard label="Active subscriptions" value={subscriptions.length} />
-              <SummaryCard label="Return requests" value={returnRequests.length} tone={returnRequests.length ? "alert" : "primary"} />
+              <SummaryCard label="Pending Return Requests" value={returnRequests.length} tone={returnRequests.length ? "alert" : "primary"} onPress={() => navigation.navigate("ReturnRequests")} />
             </View>
             <View className="flex-row">
               <SummaryCard label="Low stock alerts" value={lowStock.length} tone={lowStock.length ? "alert" : "primary"} />

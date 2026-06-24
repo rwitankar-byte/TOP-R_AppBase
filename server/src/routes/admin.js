@@ -30,28 +30,43 @@ async function findReturnSubscription(supabase, order) {
 
 export function getReturnTransitionEffects(subscription, returnOrder, targetStatus) {
   if (targetStatus === "Confirmed") {
-    return { subscriptionUpdates: { status: "Return Confirmed" }, refundAmount: 0, transaction: null };
-  }
-  if (targetStatus === "Cancelled") {
-    return { subscriptionUpdates: { status: "Active" }, refundAmount: 0, transaction: null };
+    return { subscriptionUpdates: { status: "Return Pending", return_status: "Return Pending" }, refundAmount: 0, transaction: null, walletCredit: false };
   }
   if (targetStatus === "Picked Up") {
+    return { subscriptionUpdates: { status: "Picked Up", return_status: "Picked Up" }, refundAmount: 0, transaction: null, walletCredit: false };
+  }
+  if (targetStatus === "Returned") {
+    return { subscriptionUpdates: { status: "Returned", return_status: "Returned" }, refundAmount: 0, transaction: null, walletCredit: false };
+  }
+  if (targetStatus === "Refund Completed") {
     const jars = Number(subscription.jar_count || subscription.quantity || returnOrder.order_items?.[0]?.quantity || 1);
     const refundAmount = subscription.deposit_refunded ? 0 : jars * JAR_DEPOSIT;
     return {
-      subscriptionUpdates: { status: "Cancelled", deposit_refunded: true },
+      subscriptionUpdates: { status: "Refund Completed", return_status: "Refund Completed", deposit_refunded: true },
       refundAmount,
       transaction: refundAmount
         ? {
             user_id: subscription.user_id,
-            type: "refund_cod",
+            type: "refund_wallet",
             amount: refundAmount,
-            description: `Refund via COD - ₹${refundAmount} paid by delivery boy on jar pickup`
+            description: `Refund completed to wallet for ${jars} returned jar(s)`
           }
-        : null
+        : null,
+      walletCredit: refundAmount > 0
     };
   }
-  return { subscriptionUpdates: null, refundAmount: 0, transaction: null };
+  if (targetStatus === "Cancelled") {
+    const wasRejected = returnOrder.status === "Placed";
+    return {
+      subscriptionUpdates: wasRejected
+        ? { status: "Active", return_status: null, cancel_requested_at: null }
+        : { status: "Cancelled", return_status: "Cancelled" },
+      refundAmount: 0,
+      transaction: null,
+      walletCredit: false
+    };
+  }
+  return { subscriptionUpdates: null, refundAmount: 0, transaction: null, walletCredit: false };
 }
 
 router.post("/approve-return", async (req, res, next) => {
@@ -84,7 +99,7 @@ router.post("/approve-return", async (req, res, next) => {
       .single();
     if (updateOrderError) throw updateOrderError;
 
-    const { subscriptionUpdates, refundAmount, transaction } = getReturnTransitionEffects(subscription, returnOrder, target_status);
+    const { subscriptionUpdates, refundAmount, transaction, walletCredit } = getReturnTransitionEffects(subscription, returnOrder, target_status);
 
     let updatedSubscription = subscription;
     if (subscriptionUpdates) {
@@ -99,6 +114,19 @@ router.post("/approve-return", async (req, res, next) => {
     }
 
     if (transaction) {
+      if (walletCredit) {
+        const { data: user, error: userError } = await supabase
+          .from("users")
+          .select("wallet_balance")
+          .eq("id", subscription.user_id)
+          .single();
+        if (userError) throw userError;
+        const { error: walletError } = await supabase
+          .from("users")
+          .update({ wallet_balance: Number(user.wallet_balance || 0) + refundAmount })
+          .eq("id", subscription.user_id);
+        if (walletError) throw walletError;
+      }
       const { error: transactionError } = await supabase.from("transactions").insert(transaction);
       if (transactionError) throw transactionError;
     }
@@ -108,7 +136,7 @@ router.post("/approve-return", async (req, res, next) => {
       order: updatedOrder,
       subscription: updatedSubscription,
       refund_amount: refundAmount,
-      refund_method: target_status === "Picked Up" ? "COD" : null
+      refund_method: target_status === "Refund Completed" ? "Wallet" : null
     });
   } catch (error) {
     next(error);

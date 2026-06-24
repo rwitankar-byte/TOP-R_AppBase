@@ -46,7 +46,11 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
       const result = await api.advanceReturn(order.id, targetStatus);
       setSubscription(result.subscription);
       if (targetStatus === "Picked Up") {
-        Alert.alert("Return picked up", `Refund ${money(result.refund_amount)} via Cash on Delivery - paid by delivery boy.`);
+        Alert.alert("Jars picked up", "The returned jars are ready for inspection.");
+      } else if (targetStatus === "Returned") {
+        Alert.alert("Return completed", "The jars have been marked as returned. Process the wallet refund next.");
+      } else if (targetStatus === "Refund Completed") {
+        Alert.alert("Refund completed", `${money(result.refund_amount)} has been credited to the customer wallet.`);
       } else if (targetStatus === "Cancelled") {
         Alert.alert("Return rejected", "The subscription remains Active.");
       } else {
@@ -72,7 +76,7 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
           <Text className="text-muted mt-2">Customer: {subscription.users?.phone || "Unknown"}</Text>
           <Text className="text-muted mt-1">Jars owned: {subscription.jar_count || subscription.quantity}</Text>
           <Text className="text-primary font-extrabold mt-2">Deposit {money(subscription.jar_deposit)} • Water fill {money(subscription.water_charge_per_delivery)}</Text>
-          <Text className="text-muted mt-1">Deposit refunded: {subscription.deposit_refunded ? "Yes - COD" : "No"}</Text>
+          <Text className="text-muted mt-1">Deposit refunded: {subscription.deposit_refunded ? "Yes - wallet credit completed" : "No"}</Text>
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Refill history ({refillOrders.length})</Text>
@@ -92,7 +96,7 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
           const jarCount = Number(order.jar_count || subscription.jar_count || subscription.quantity || 1);
           return (
             <View key={order.id} className="border border-gray-100 rounded-lg p-4 mb-3">
-              <View className="flex-row justify-between"><Text className="text-ink font-extrabold">{shortId(order.id)}</Text><Text className="text-primary font-extrabold">{money(jarCount * 250)} COD</Text></View>
+              <View className="flex-row justify-between"><Text className="text-ink font-extrabold">{shortId(order.id)}</Text><Text className="text-primary font-extrabold">{money(jarCount * 250)} deposit</Text></View>
               <Text className="text-muted mt-2">Status: {order.status}</Text>
               <Text className="text-muted mt-1">Jars: {jarCount}</Text>
               {getReturnActions(order.status).map((action) => (

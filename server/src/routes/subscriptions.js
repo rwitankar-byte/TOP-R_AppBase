@@ -127,7 +127,7 @@ router.patch("/:id", async (req, res, next) => {
       updates.water_charge_per_delivery = jars * WATER_CHARGE;
     }
 
-    if (["Return Requested", "Return Confirmed", "Cancelled"].includes(updates.status)) {
+    if (["Cancellation Requested", "Return Pending", "Picked Up", "Returned", "Refund Completed", "Cancelled"].includes(updates.status)) {
       return res.status(400).json({ error: "Return statuses are managed through the return request flow" });
     }
 

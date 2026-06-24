@@ -8,6 +8,21 @@ import { getOrCreateMockSession } from "../services/session";
 
 const JAR_DEPOSIT = 250;
 const WATER_CHARGE = 40;
+const activeStatuses = ["Active", "Paused"];
+const returnStatuses = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned", "Refund Completed", "Cancelled"];
+const pendingReturnStatuses = returnStatuses.filter((status) => status !== "Cancelled");
+
+function returnMessage(status) {
+  const messages = {
+    "Cancellation Requested": "Cancellation request submitted. Waiting for admin approval.",
+    "Return Pending": "Return pickup is pending. Please keep empty jars ready.",
+    "Picked Up": "Empty jars picked up. Refund verification in progress.",
+    Returned: "Jars returned successfully. Refund will be processed soon.",
+    "Refund Completed": "Refund completed to your wallet.",
+    Cancelled: "Subscription cancelled."
+  };
+  return messages[status] || "Return request is being processed.";
+}
 
 function Stepper({ value, onDecrease, onIncrease, maximum }) {
   return (
@@ -54,8 +69,7 @@ export default function SubscriptionsScreen({ navigation }) {
       setProducts(productData);
       setSelectedProductId((current) => current || productData[0]?.id || "");
       if (storedSession?.user?.id) {
-        const subscriptionData = await api.getSubscriptions(storedSession.user.id, "Active");
-        setSubscriptions(subscriptionData.filter((subscription) => subscription.status === "Active"));
+        setSubscriptions(await api.getSubscriptions(storedSession.user.id));
       }
     } catch (error) {
       Alert.alert("Subscriptions", error.message);
@@ -120,7 +134,7 @@ export default function SubscriptionsScreen({ navigation }) {
 
   const confirmCancel = (subscription) => {
     const refund = Number(subscription.jar_deposit || subscription.jar_count * JAR_DEPOSIT);
-    Alert.alert("Cancel subscription", `Request a jar pickup for a ₹${refund} COD refund paid by the delivery boy.`, [
+    Alert.alert("Cancel subscription", `Request pickup of all jars. Your ₹${refund} deposit will be refunded to your wallet after the jars are returned.`, [
       { text: "Keep Active", style: "cancel" },
       {
         text: "Request Return",
@@ -148,6 +162,8 @@ export default function SubscriptionsScreen({ navigation }) {
   };
 
   const refillQuantityFor = (subscription) => Math.max(1, Number(refillQuantities[subscription.id] || 1));
+  const activeSubscriptions = subscriptions.filter((subscription) => activeStatuses.includes(subscription.status));
+  const pendingSubscriptions = subscriptions.filter((subscription) => pendingReturnStatuses.includes(subscription.status));
 
   const addRefill = (subscription) => {
     const quantity = refillQuantityFor(subscription);
@@ -216,10 +232,10 @@ export default function SubscriptionsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <Text className="text-ink font-extrabold text-lg mb-3">Active subscriptions</Text>
+        <Text className="text-ink font-extrabold text-lg mb-3">Active Subscriptions</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && subscriptions.length === 0 && <Text className="text-muted mb-4">No subscriptions yet.</Text>}
-        {subscriptions.map((subscription) => {
+        {!loading && activeSubscriptions.length === 0 && <Text className="text-muted mb-4">No active subscriptions yet.</Text>}
+        {activeSubscriptions.map((subscription) => {
           const maxJars = Number(subscription.jar_count || subscription.quantity || 1);
           const refillQuantity = refillQuantityFor(subscription);
           return (
@@ -257,8 +273,8 @@ export default function SubscriptionsScreen({ navigation }) {
               )}
 
               <View className="flex-row mt-3">
-                <TouchableOpacity className="bg-wash px-4 py-2 rounded-md mr-3" onPress={() => updateSubscription(subscription.id, { status: "Paused" })}>
-                  <Text className="font-bold text-ink">Pause</Text>
+                <TouchableOpacity className="bg-wash px-4 py-2 rounded-md mr-3" onPress={() => updateSubscription(subscription.id, { status: subscription.status === "Paused" ? "Active" : "Paused" })}>
+                  <Text className="font-bold text-ink">{subscription.status === "Paused" ? "Resume" : "Pause"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity className="bg-red-50 px-4 py-2 rounded-md" onPress={() => confirmCancel(subscription)}>
                   <Text className="font-bold text-red-500">Cancel</Text>
@@ -267,6 +283,22 @@ export default function SubscriptionsScreen({ navigation }) {
             </View>
           );
         })}
+        {!loading && pendingSubscriptions.length > 0 && (
+          <>
+            <Text className="text-ink font-extrabold text-lg mt-2 mb-3">Pending Cancellation / Return Requests</Text>
+            {pendingSubscriptions.map((subscription) => (
+              <View key={subscription.id} className="border border-gray-100 rounded-lg p-4 mb-4">
+                <View className="flex-row justify-between">
+                  <Text className="font-bold text-ink">{subscription.products?.name || "Water Jar Subscription"}</Text>
+                  <Text className="text-primary font-bold">{subscription.status}</Text>
+                </View>
+                <Text className="text-muted mt-2">Jars: {subscription.jar_count || subscription.quantity}</Text>
+                <Text className="text-muted mt-1">Refundable deposit: ₹{Number(subscription.jar_deposit || 0)}</Text>
+                <Text className="text-ink font-bold mt-3">{returnMessage(subscription.status)}</Text>
+              </View>
+            ))}
+          </>
+        )}
         <View className="h-8" />
       </ScrollView>
     </SafeAreaView>

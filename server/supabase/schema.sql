@@ -34,8 +34,8 @@ create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
   address_id uuid references public.addresses(id) on delete set null,
-  status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Out for Delivery', 'Delivered', 'Out for Return', 'Picked Up', 'Cancelled')),
-  type text not null default 'regular' check (type in ('regular', 'refill', 'return')),
+  status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Out for Delivery', 'Delivered', 'Out for Return', 'Picked Up', 'Returned', 'Refund Completed', 'Cancelled')),
+  type text not null default 'regular' check (type in ('regular', 'subscription', 'refill', 'return')),
   total_amount numeric(10, 2) not null,
   delivery_date date,
   created_at timestamptz not null default now()
@@ -56,12 +56,14 @@ create table if not exists public.subscriptions (
   address_id uuid references public.addresses(id) on delete set null,
   frequency text not null check (frequency in ('Daily', 'Weekly', 'Custom')),
   start_date date not null,
-  status text not null default 'Pending' check (status in ('Pending', 'Active', 'Paused', 'Return Requested', 'Return Confirmed', 'Cancelled')),
+  status text not null default 'Pending' check (status in ('Pending', 'Active', 'Paused', 'Cancellation Requested', 'Return Pending', 'Picked Up', 'Returned', 'Refund Completed', 'Cancelled')),
   quantity integer not null default 1 check (quantity > 0),
   jar_count integer not null default 1 check (jar_count > 0),
   jar_deposit numeric(10, 2) not null default 250,
   water_charge_per_delivery numeric(10, 2) not null default 40,
-  deposit_refunded boolean not null default false
+  deposit_refunded boolean not null default false,
+  cancel_requested_at timestamptz,
+  return_status text
 );
 
 alter table public.orders

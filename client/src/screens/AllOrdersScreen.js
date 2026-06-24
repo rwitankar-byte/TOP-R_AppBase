@@ -12,6 +12,17 @@ const statusClasses = {
   Cancelled: "bg-red-100 text-red-700"
 };
 
+const orderLabels = {
+  regular: "Product Order",
+  subscription: "Subscription Started",
+  refill: "Refill Request",
+  return: "Return Request"
+};
+
+function orderLabel(order) {
+  return orderLabels[order.type || order.order_type] || "Product Order";
+}
+
 export default function AllOrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +74,7 @@ export default function AllOrdersScreen({ navigation }) {
                 {order.status}
               </Text>
             </View>
+            <Text className="text-primary font-bold text-xs mt-2">{orderLabel(order)}</Text>
             <Text className="text-muted mt-2">
               {new Date(order.created_at).toLocaleString("en-IN", {
                 day: "2-digit",

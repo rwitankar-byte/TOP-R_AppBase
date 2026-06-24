@@ -33,8 +33,8 @@ export function validateRefillItems({ subscription, userId, items }) {
 }
 
 export function validateReturnRequest({ subscription, userId, items }) {
-  if (subscription.user_id !== userId || subscription.status !== "Active" || subscription.deposit_refunded) {
-    const error = new Error("Return requests require an active subscription owned by this customer");
+  if (subscription.user_id !== userId || !["Active", "Paused"].includes(subscription.status) || subscription.deposit_refunded) {
+    const error = new Error("Return requests require an active or paused subscription owned by this customer");
     error.status = 400;
     throw error;
   }
@@ -177,7 +177,7 @@ router.post("/", async (req, res, next) => {
   try {
     console.log("POST /orders body:", JSON.stringify(req.body));
     const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id, subscription_id } = req.body;
-    const orderType = ["delivery", "return", "refill"].includes(type) ? type : "delivery";
+    const orderType = ["delivery", "return", "refill", "subscription"].includes(type) ? type : "delivery";
     const storedOrderType = orderType === "delivery" ? "regular" : orderType;
     if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
       return res.status(400).json({ error: "user_id, address_id, and items are required" });
@@ -223,6 +223,19 @@ router.post("/", async (req, res, next) => {
       normalizedItems = validateRefillItems({ subscription, userId: user_id, items: normalizedItems });
     }
 
+    if (orderType === "subscription") {
+      if (!subscription_id) return res.status(400).json({ error: "subscription_id is required for subscription orders" });
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .select("id,user_id,product_id,status")
+        .eq("id", subscription_id)
+        .single();
+      if (subscriptionError) throw subscriptionError;
+      if (subscription.user_id !== user_id || subscription.product_id !== normalizedItems[0]?.product_id) {
+        return res.status(400).json({ error: "Subscription order must match the customer and subscription product" });
+      }
+    }
+
     const computedTotal = normalizedItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
     const orderTotal = orderType === "refill" ? computedTotal : parseFloat(req.body.total_amount) || computedTotal;
     const orderPayload = {
@@ -230,9 +243,9 @@ router.post("/", async (req, res, next) => {
       address_id: address_id || null,
       total_amount: orderTotal,
       delivery_date,
-      status: "Placed",
+      status: orderType === "subscription" ? "Delivered" : "Placed",
       type: storedOrderType,
-      subscription_id: ["refill", "return"].includes(orderType) ? subscription_id : null
+      subscription_id: ["refill", "return", "subscription"].includes(orderType) ? subscription_id : null
     };
     let { data: order, error: orderError } = await supabase
       .from("orders")
@@ -260,9 +273,13 @@ router.post("/", async (req, res, next) => {
     if (returnSubscription) {
       const { error: subscriptionError } = await supabase
         .from("subscriptions")
-        .update({ status: "Return Requested" })
-        .eq("id", returnSubscription.id)
-        .eq("status", "Active");
+      .update({
+        status: "Cancellation Requested",
+        return_status: "Cancellation Requested",
+        cancel_requested_at: new Date().toISOString()
+      })
+      .eq("id", returnSubscription.id)
+      .in("status", ["Active", "Paused"]);
       if (subscriptionError) throw subscriptionError;
     }
 
@@ -310,7 +327,7 @@ router.get("/", requireAdmin, async (req, res, next) => {
 router.get("/returns", requireAdmin, async (req, res, next) => {
   try {
     const returns = await fetchOrders(req, { returnsOnly: true });
-    const activeReturns = returns.filter((order) => !["Picked Up", "Cancelled"].includes(order.status));
+    const activeReturns = returns.filter((order) => order.status !== "Cancelled");
     res.json(await attachSubscriptionsToReturns(activeReturns));
   } catch (error) {
     next(error);

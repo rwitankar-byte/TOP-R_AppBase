@@ -71,6 +71,18 @@ export default function CartScreen({ navigation }) {
         status: "Pending"
       });
       await api.updateSubscription(subscription.id, { status: "Active" });
+      const subscriptionOrder = {
+        user_id: session.user.id,
+        address_id: address.id,
+        payment_id: paymentLinked ? undefined : payment?.id,
+        type: "subscription",
+        subscription_id: subscription.id,
+        total_amount: Number(item.jar_deposit) + Number(item.water_charge_per_delivery),
+        items: [{ product_id: item.product_id, quantity: item.jar_count, unit_price: 290 }]
+      };
+      console.log("POST /orders subscription request body:", JSON.stringify(subscriptionOrder));
+      await api.placeOrder(subscriptionOrder);
+      paymentLinked = Boolean(payment?.id);
     }
 
     for (const item of refillItems) {
@@ -98,8 +110,7 @@ export default function CartScreen({ navigation }) {
       return;
     }
 
-    const deliveryItems = items.filter((item) => item.type !== "subscription");
-    if (deliveryItems.length && !address?.id) {
+    if (!address?.id) {
       Alert.alert("Address required", "No delivery address was found for this user.");
       return;
     }

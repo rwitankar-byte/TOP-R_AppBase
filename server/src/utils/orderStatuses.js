@@ -8,9 +8,11 @@ export const VALID_TRANSITIONS = {
 
 export const RETURN_VALID_TRANSITIONS = {
   Placed: ["Confirmed", "Cancelled"],
-  Confirmed: ["Out for Return"],
+  Confirmed: ["Picked Up"],
   "Out for Return": ["Picked Up"],
-  "Picked Up": [],
+  "Picked Up": ["Returned"],
+  Returned: ["Refund Completed"],
+  "Refund Completed": ["Cancelled"],
   Cancelled: []
 };
 

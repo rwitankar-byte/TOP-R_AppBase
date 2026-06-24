@@ -42,7 +42,11 @@ export default function ReturnRequestsScreen({ navigation }) {
     try {
       const result = await api.advanceReturn(order.id, targetStatus);
       if (targetStatus === "Picked Up") {
-        Alert.alert("Return picked up", `Refund ${money(result.refund_amount)} via Cash on Delivery - paid by delivery boy.`);
+        Alert.alert("Jars picked up", "The returned jars are ready for inspection.");
+      } else if (targetStatus === "Returned") {
+        Alert.alert("Return completed", "The jars have been marked as returned. Process the wallet refund next.");
+      } else if (targetStatus === "Refund Completed") {
+        Alert.alert("Refund completed", `${money(result.refund_amount)} has been credited to the customer wallet.`);
       } else if (targetStatus === "Cancelled") {
         Alert.alert("Return rejected", "The subscription remains Active.");
       } else {
@@ -59,7 +63,7 @@ export default function ReturnRequestsScreen({ navigation }) {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}>
-        <ScreenHeader title="Return Requests" subtitle="Pending jar pickups" onBack={navigation.goBack} rightAction={loadReturns} />
+        <ScreenHeader title="Return Requests" subtitle="Cancellation and return workflow" onBack={navigation.goBack} rightAction={loadReturns} />
         {loading && <ActivityIndicator color="#00B5B0" />}
         {!loading && returns.length === 0 && <Text className="text-muted">No pending returns.</Text>}
         {returns.map((order) => {

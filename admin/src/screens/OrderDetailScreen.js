@@ -72,7 +72,11 @@ export default function OrderDetailScreen({ navigation, route }) {
       const updatedOrder = isReturn ? result.order : result;
       setOrder((current) => ({ ...current, ...updatedOrder }));
       if (isReturn && status === "Picked Up") {
-        Alert.alert("Return picked up", `Refund ${money(result.refund_amount)} via Cash on Delivery - paid by delivery boy.`);
+        Alert.alert("Jars picked up", "The returned jars are ready for inspection.");
+      } else if (isReturn && status === "Returned") {
+        Alert.alert("Return completed", "The jars have been marked as returned. Process the wallet refund next.");
+      } else if (isReturn && status === "Refund Completed") {
+        Alert.alert("Refund completed", `${money(result.refund_amount)} has been credited to the customer wallet.`);
       } else {
         Alert.alert("Order updated", `Status changed to ${status}.`);
       }
@@ -131,7 +135,7 @@ export default function OrderDetailScreen({ navigation, route }) {
         ) : (
           <View className="bg-gray-100 rounded-lg p-4 mt-4 mb-3">
             <Text className="text-muted font-bold">
-              {order.status === "Delivered" ? "Order Delivered - No further action possible" : order.status === "Picked Up" ? "Return Picked Up - No further action possible" : "Order Cancelled - No further action possible"}
+              {order.status === "Delivered" ? "Order Delivered - No further action possible" : order.status === "Cancelled" ? "Order Cancelled - No further action possible" : "This return has no further actions."}
             </Text>
           </View>
         )}
