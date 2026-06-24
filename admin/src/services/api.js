@@ -1,4 +1,4 @@
-export const BASE_URL = "https://top-rappbase-production.up.railway.app";
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://top-rappbase-production.up.railway.app";
 const ADMIN_KEY = "topr-admin-2024";
 
 async function request(path, options = {}) {
