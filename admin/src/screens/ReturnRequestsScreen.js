@@ -81,6 +81,9 @@ export default function ReturnRequestsScreen({ navigation }) {
               <Text className="text-muted mt-1">Product: {subscription?.products?.name || order.order_items?.[0]?.products?.name || "Water Jar"}</Text>
               <Text className="text-muted mt-1">Jars: {jarCount}</Text>
               <Text className="text-muted mt-1">Date: {dateTime(order.created_at)}</Text>
+              <TouchableOpacity className="mt-3" onPress={() => navigation.navigate("OrderDetail", { order })}>
+                <Text className="text-primary font-bold">View order / assign delivery boy</Text>
+              </TouchableOpacity>
               {actions.map((action) => (
                 <TouchableOpacity
                   key={action.status}

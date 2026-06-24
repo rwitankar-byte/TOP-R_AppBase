@@ -36,6 +36,17 @@ export const api = {
       body: JSON.stringify({ quantity_available: quantity })
     }),
   getUsers: () => request("/users"),
+  getDeliveryBoys: () => request("/admin/delivery-boys"),
+  createDeliveryBoy: (deliveryBoy) =>
+    request("/admin/delivery-boys", { method: "POST", body: JSON.stringify(deliveryBoy) }),
+  updateDeliveryBoy: (id, updates) =>
+    request(`/admin/delivery-boys/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
+  deleteDeliveryBoy: (id) => request(`/admin/delivery-boys/${id}`, { method: "DELETE" }),
+  assignOrder: (id, deliveryBoyId, notes) =>
+    request(`/admin/orders/${id}/assign`, { method: "POST", body: JSON.stringify({ delivery_boy_id: deliveryBoyId, notes }) }),
+  getDeliveryOrders: (deliveryBoyId) => request(`/delivery/${deliveryBoyId}/orders`),
+  updateDeliveryOrderStatus: (id, deliveryBoyId, status) =>
+    request(`/delivery/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ delivery_boy_id: deliveryBoyId, status }) }),
   advanceReturn: (orderId, targetStatus) =>
     request("/admin/approve-return", { method: "POST", body: JSON.stringify({ order_id: orderId, target_status: targetStatus }) })
 };

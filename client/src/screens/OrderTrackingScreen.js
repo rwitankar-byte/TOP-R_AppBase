@@ -6,14 +6,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { getSession } from "../services/session";
 
-const steps = ["Placed", "Confirmed", "Out for Delivery", "Delivered"];
+const deliverySteps = ["Placed", "Confirmed", "Assigned", "Picked Up", "Delivered"];
+const returnSteps = ["Placed", "Confirmed", "Assigned", "Picked Up", "Returned"];
 
 export default function OrderTrackingScreen({ route }) {
   const [order, setOrder] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const isFocused = useIsFocused();
   const inFlightRequest = useRef(null);
-  const currentIndex = useMemo(() => Math.max(0, steps.indexOf(order?.status || "Placed")), [order?.status]);
+  const steps = useMemo(() => ((order?.type || order?.order_type) === "return" ? returnSteps : deliverySteps), [order?.type, order?.order_type]);
+  const currentIndex = useMemo(() => Math.max(0, steps.indexOf(order?.status || "Placed")), [order?.status, steps]);
 
   const loadOrder = useCallback(async ({ silent = false } = {}) => {
     if (inFlightRequest.current) return inFlightRequest.current;
@@ -73,9 +75,14 @@ export default function OrderTrackingScreen({ route }) {
 
         <Text className="text-ink font-extrabold text-lg mb-3">Delivery boy details</Text>
         <View className="border border-gray-100 rounded-lg p-4">
-          <Text className="text-ink font-bold">Rahul Sharma</Text>
-          <Text className="text-muted mt-1">Vehicle: MH 02 AB 4521</Text>
-          <Text className="text-muted mt-1">Phone: +91 90000 11111</Text>
+          {order?.delivery_boys ? (
+            <>
+              <Text className="text-ink font-bold">{order.delivery_boys.name}</Text>
+              <Text className="text-muted mt-1">Phone: {order.delivery_boys.phone}</Text>
+            </>
+          ) : (
+            <Text className="text-muted">A delivery boy will be assigned after your order is confirmed.</Text>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

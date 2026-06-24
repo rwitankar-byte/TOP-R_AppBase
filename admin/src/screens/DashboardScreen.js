@@ -113,7 +113,9 @@ export default function DashboardScreen({ navigation, onLogout }) {
               ["View Orders", "Orders", "receipt"],
               ["Return Requests", "ReturnRequests", "archive"],
               ["View Subscriptions", "Subscriptions", "repeat"],
-              ["Manage Inventory", "Inventory", "cube"]
+              ["Manage Inventory", "Inventory", "cube"],
+              ["Delivery Boys", "DeliveryBoys", "bicycle"],
+              ["Delivery Mode", "DeliveryLogin", "car"]
             ].map(([label, route, icon]) => (
               <TouchableOpacity
                 key={route}

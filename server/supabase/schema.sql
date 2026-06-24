@@ -34,7 +34,7 @@ create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
   address_id uuid references public.addresses(id) on delete set null,
-  status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Out for Delivery', 'Delivered', 'Out for Return', 'Picked Up', 'Returned', 'Refund Completed', 'Cancelled')),
+  status text not null default 'Placed' check (status in ('Placed', 'Confirmed', 'Assigned', 'Out for Delivery', 'Delivered', 'Out for Return', 'Picked Up', 'Returned', 'Refund Completed', 'Cancelled')),
   type text not null default 'regular' check (type in ('regular', 'subscription', 'refill', 'return')),
   total_amount numeric(10, 2) not null,
   delivery_date date,
@@ -68,6 +68,29 @@ create table if not exists public.subscriptions (
 
 alter table public.orders
 add column if not exists subscription_id uuid references public.subscriptions(id) on delete set null;
+
+create table if not exists public.delivery_boys (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text not null unique,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table public.orders
+add column if not exists delivery_boy_id uuid references public.delivery_boys(id) on delete set null,
+add column if not exists assigned_at timestamptz,
+add column if not exists picked_up_at timestamptz,
+add column if not exists delivered_at timestamptz;
+
+create table if not exists public.order_assignments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  delivery_boy_id uuid not null references public.delivery_boys(id) on delete restrict,
+  assigned_at timestamptz not null default now(),
+  status text not null default 'Assigned',
+  notes text
+);
 
 create table if not exists public.inventory (
   id uuid primary key default gen_random_uuid(),
@@ -104,6 +127,8 @@ alter table public.subscriptions enable row level security;
 alter table public.inventory enable row level security;
 alter table public.payments enable row level security;
 alter table public.transactions enable row level security;
+alter table public.delivery_boys enable row level security;
+alter table public.order_assignments enable row level security;
 
 create policy "Products are viewable by everyone" on public.products for select using (is_active = true);
 create policy "Inventory is viewable by authenticated users" on public.inventory for select to authenticated using (true);

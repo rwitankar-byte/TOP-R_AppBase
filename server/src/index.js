@@ -5,6 +5,7 @@ import morgan from "morgan";
 import addressRoutes from "./routes/addresses.js";
 import adminRoutes from "./routes/admin.js";
 import authRoutes from "./routes/auth.js";
+import deliveryRoutes from "./routes/delivery.js";
 import inventoryRoutes from "./routes/inventory.js";
 import orderRoutes from "./routes/orders.js";
 import paymentRoutes from "./routes/payments.js";
@@ -22,6 +23,7 @@ app.use(morgan("dev"));
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "water-app-server" }));
 app.use("/admin", adminRoutes);
+app.use("/delivery", deliveryRoutes);
 app.use("/auth", authRoutes);
 app.use("/products", productRoutes);
 app.use("/orders", orderRoutes);

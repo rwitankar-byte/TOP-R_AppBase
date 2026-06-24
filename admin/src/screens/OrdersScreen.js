@@ -6,7 +6,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId, statusClass } from "../utils/format";
 
-const filters = ["All", "Placed", "Confirmed", "Out for Delivery", "Delivered"];
+const filters = ["All", "Placed", "Confirmed", "Assigned", "Picked Up", "Delivered"];
 
 function itemsText(order) {
   return (order.order_items || [])
@@ -86,6 +86,7 @@ export default function OrdersScreen({ navigation }) {
             </View>
             <Text className="text-muted">Customer: {order.users?.phone || "Unknown"}</Text>
             <Text className="text-muted mt-1">Address: {order.addresses?.full_address || "No address"}</Text>
+            {order.delivery_boys && <Text className="text-muted mt-1">Delivery boy: {order.delivery_boys.name} • {order.delivery_boys.phone}</Text>}
             <Text className="text-muted mt-1">Items: {itemsText(order) || "No items"}</Text>
             <View className="flex-row justify-between mt-3">
               <Text className="text-primary font-extrabold">{money(order.total_amount)}</Text>

@@ -9,27 +9,31 @@ import { getReturnActions } from "../utils/returnStatus";
 
 const VALID_TRANSITIONS = {
   Placed: ["Confirmed", "Cancelled"],
-  Confirmed: ["Out for Delivery", "Cancelled"],
-  "Out for Delivery": ["Delivered", "Cancelled"],
+  Confirmed: ["Cancelled"],
+  Assigned: [],
+  "Out for Delivery": [],
+  "Picked Up": [],
   Delivered: [],
   Cancelled: []
 };
 
 const statusLabels = {
   Confirmed: "Confirm",
-  "Out for Delivery": "Out for Delivery",
-  Delivered: "Delivered",
   Cancelled: "Cancel"
 };
 
 export default function OrderDetailScreen({ navigation, route }) {
   const [order, setOrder] = useState(route.params.order);
   const [saving, setSaving] = useState(false);
+  const [deliveryBoys, setDeliveryBoys] = useState([]);
+  const [selectedDeliveryBoyId, setSelectedDeliveryBoyId] = useState("");
+  const [assigning, setAssigning] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isFocused = useIsFocused();
   const inFlightRequest = useRef(null);
   const isRefill = order.order_type === "refill" || order.type === "refill";
   const isReturn = order.order_type === "return" || order.type === "return";
+  const canAssign = order.status === "Confirmed" && !order.delivery_boy_id;
   const nextStatuses = isReturn ? getReturnActions(order.status) : (VALID_TRANSITIONS[order.status] || []).map((status) => ({ status, label: statusLabels[status], destructive: status === "Cancelled" }));
 
   const loadOrder = useCallback(async ({ silent = false } = {}) => {
@@ -55,6 +59,12 @@ export default function OrderDetailScreen({ navigation, route }) {
     const interval = setInterval(() => loadOrder({ silent: true }), 15000);
     return () => clearInterval(interval);
   }, [isFocused, loadOrder]);
+
+  useEffect(() => {
+    api.getDeliveryBoys()
+      .then((items) => setDeliveryBoys(items.filter((item) => item.is_active)))
+      .catch(() => setDeliveryBoys([]));
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -87,6 +97,23 @@ export default function OrderDetailScreen({ navigation, route }) {
     }
   };
 
+  const assignDeliveryBoy = async () => {
+    if (!selectedDeliveryBoyId) {
+      Alert.alert("Choose delivery boy", "Select an active delivery boy before assigning this order.");
+      return;
+    }
+    setAssigning(true);
+    try {
+      const result = await api.assignOrder(order.id, selectedDeliveryBoyId);
+      setOrder(result.order);
+      Alert.alert("Order assigned", `${result.delivery_boy.name} has been assigned to this order.`);
+    } catch (error) {
+      Alert.alert("Assignment failed", error.message);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView
@@ -106,6 +133,7 @@ export default function OrderDetailScreen({ navigation, route }) {
           <Text className="text-muted mt-1">Name: {order.users?.name || "Not set"}</Text>
           <Text className="text-muted mt-1">Address: {order.addresses?.full_address || "No address"}</Text>
           <Text className="text-muted mt-1">Time: {dateTime(order.created_at)}</Text>
+          {order.delivery_boys && <Text className="text-muted mt-1">Delivery boy: {order.delivery_boys.name} • {order.delivery_boys.phone}</Text>}
           <Text className="text-primary text-2xl font-extrabold mt-3">{money(order.total_amount)}</Text>
           {isRefill && <Text className="text-blue-700 font-bold mt-2">Subscription refill — delivery boy picks up empty jars</Text>}
         </View>
@@ -117,6 +145,33 @@ export default function OrderDetailScreen({ navigation, route }) {
             <Text className="text-muted">x {item.quantity}</Text>
           </View>
         ))}
+
+        <Text className="text-ink font-extrabold text-lg mt-4 mb-3">Assign Delivery Boy</Text>
+        {order.delivery_boys ? (
+          <View className="bg-wash rounded-lg p-4 mb-3">
+            <Text className="text-ink font-bold">{order.delivery_boys.name}</Text>
+            <Text className="text-muted mt-1">{order.delivery_boys.phone} • Assigned</Text>
+          </View>
+        ) : canAssign ? (
+          <View className="border border-gray-100 rounded-lg p-4 mb-3">
+            {deliveryBoys.length === 0 && <Text className="text-muted">No active delivery boys. Add one from Delivery Boys.</Text>}
+            {deliveryBoys.map((deliveryBoy) => (
+              <TouchableOpacity
+                key={deliveryBoy.id}
+                className={`border rounded-lg p-3 mb-2 ${selectedDeliveryBoyId === deliveryBoy.id ? "border-primary bg-wash" : "border-gray-100"}`}
+                onPress={() => setSelectedDeliveryBoyId(deliveryBoy.id)}
+              >
+                <Text className="text-ink font-bold">{deliveryBoy.name}</Text>
+                <Text className="text-muted mt-1">{deliveryBoy.phone}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity className="bg-primary rounded-lg py-3 items-center mt-2" onPress={assignDeliveryBoy} disabled={assigning || !deliveryBoys.length}>
+              <Text className="text-white font-extrabold">{assigning ? "Assigning..." : "Assign Order"}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text className="text-muted mb-3">Confirm this order before assigning a delivery boy.</Text>
+        )}
 
         {nextStatuses.length ? (
           <>
@@ -135,7 +190,7 @@ export default function OrderDetailScreen({ navigation, route }) {
         ) : (
           <View className="bg-gray-100 rounded-lg p-4 mt-4 mb-3">
             <Text className="text-muted font-bold">
-              {order.status === "Delivered" ? "Order Delivered - No further action possible" : order.status === "Cancelled" ? "Order Cancelled - No further action possible" : "This return has no further actions."}
+              {order.status === "Delivered" ? "Order Delivered - No further action possible" : order.status === "Cancelled" ? "Order Cancelled - No further action possible" : ["Assigned", "Picked Up", "Out for Delivery"].includes(order.status) ? "The assigned delivery boy will update this order." : "This return has no further actions."}
             </Text>
           </View>
         )}

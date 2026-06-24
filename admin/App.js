@@ -8,6 +8,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import CustomerDetailScreen from "./src/screens/CustomerDetailScreen";
 import CustomersScreen from "./src/screens/CustomersScreen";
+import DeliveryBoysScreen from "./src/screens/DeliveryBoysScreen";
+import DeliveryDashboardScreen from "./src/screens/DeliveryDashboardScreen";
+import DeliveryLoginScreen from "./src/screens/DeliveryLoginScreen";
 import DashboardScreen from "./src/screens/DashboardScreen";
 import InventoryScreen from "./src/screens/InventoryScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -102,6 +105,9 @@ export default function App() {
               <Stack.Screen name="ReturnRequests" component={ReturnRequestsScreen} />
               <Stack.Screen name="SubscriptionDetail" component={SubscriptionDetailScreen} />
               <Stack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
+              <Stack.Screen name="DeliveryBoys" component={DeliveryBoysScreen} />
+              <Stack.Screen name="DeliveryLogin" component={DeliveryLoginScreen} />
+              <Stack.Screen name="DeliveryDashboard" component={DeliveryDashboardScreen} />
             </>
           )}
         </Stack.Navigator>

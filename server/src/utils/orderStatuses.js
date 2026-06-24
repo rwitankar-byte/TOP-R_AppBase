@@ -1,14 +1,17 @@
 export const VALID_TRANSITIONS = {
   Placed: ["Confirmed", "Cancelled"],
-  Confirmed: ["Out for Delivery", "Cancelled"],
-  "Out for Delivery": ["Delivered", "Cancelled"],
+  Confirmed: ["Assigned", "Cancelled"],
+  Assigned: ["Picked Up", "Cancelled"],
+  "Out for Delivery": ["Delivered"],
+  "Picked Up": ["Delivered"],
   Delivered: [],
   Cancelled: []
 };
 
 export const RETURN_VALID_TRANSITIONS = {
   Placed: ["Confirmed", "Cancelled"],
-  Confirmed: ["Picked Up"],
+  Confirmed: ["Assigned", "Cancelled"],
+  Assigned: ["Picked Up"],
   "Out for Return": ["Picked Up"],
   "Picked Up": ["Returned"],
   Returned: ["Refund Completed"],

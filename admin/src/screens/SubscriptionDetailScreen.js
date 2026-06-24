@@ -99,6 +99,9 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
               <View className="flex-row justify-between"><Text className="text-ink font-extrabold">{shortId(order.id)}</Text><Text className="text-primary font-extrabold">{money(jarCount * 250)} deposit</Text></View>
               <Text className="text-muted mt-2">Status: {order.status}</Text>
               <Text className="text-muted mt-1">Jars: {jarCount}</Text>
+              <TouchableOpacity className="mt-3" onPress={() => navigation.navigate("OrderDetail", { order })}>
+                <Text className="text-primary font-bold">View order / assign delivery boy</Text>
+              </TouchableOpacity>
               {getReturnActions(order.status).map((action) => (
                 <TouchableOpacity key={action.status} className={`rounded-lg py-3 items-center mt-3 ${action.destructive ? "bg-red-500" : "bg-primary"}`} onPress={() => advanceReturn(order, action.status)} disabled={updatingId === order.id}>
                   <Text className="text-white font-extrabold">{updatingId === order.id ? "Updating..." : action.label}</Text>

@@ -7,6 +7,8 @@ import { getOrCreateMockSession } from "../services/session";
 const statusClasses = {
   Placed: "bg-blue-100 text-blue-700",
   Confirmed: "bg-orange-100 text-orange-700",
+  Assigned: "bg-cyan-100 text-cyan-700",
+  "Picked Up": "bg-yellow-100 text-yellow-700",
   "Out for Delivery": "bg-yellow-100 text-yellow-700",
   Delivered: "bg-green-100 text-green-700",
   Cancelled: "bg-red-100 text-red-700"
@@ -85,6 +87,7 @@ export default function AllOrdersScreen({ navigation }) {
               })}
             </Text>
             <Text className="text-primary font-extrabold mt-2">₹{Number(order.total_amount || 0)}</Text>
+            {order.delivery_boys && <Text className="text-muted mt-2">Delivery: {order.delivery_boys.name} • {order.delivery_boys.phone}</Text>}
           </TouchableOpacity>
         ))}
       </ScrollView>

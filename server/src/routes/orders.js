@@ -66,7 +66,7 @@ async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = fal
   const supabase = requireSupabase();
   let query = supabase
     .from("orders")
-    .select("*, users(phone,name), addresses(*), order_items(*, products(*))")
+    .select("*, users(phone,name), addresses(*), delivery_boys(id,name,phone), order_items(*, products(*))")
     .order("created_at", { ascending: false });
 
   if (userId) {
@@ -85,7 +85,7 @@ async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = fal
   if (error?.message?.includes("type")) {
     let fallbackQuery = supabase
       .from("orders")
-      .select("*, users(phone,name), addresses(*), order_items(*, products(*))")
+      .select("*, users(phone,name), addresses(*), delivery_boys(id,name,phone), order_items(*, products(*))")
       .order("created_at", { ascending: false });
     if (userId) {
       fallbackQuery = fallbackQuery.eq("user_id", userId);

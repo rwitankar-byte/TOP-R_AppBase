@@ -1,8 +1,9 @@
 export const RETURN_VALID_TRANSITIONS = {
   Placed: ["Confirmed", "Cancelled"],
-  Confirmed: ["Picked Up"],
-  "Out for Return": ["Picked Up"],
-  "Picked Up": ["Returned"],
+  Confirmed: [],
+  Assigned: [],
+  "Out for Return": [],
+  "Picked Up": [],
   Returned: ["Refund Completed"],
   "Refund Completed": ["Cancelled"],
   Cancelled: []
@@ -11,8 +12,7 @@ export const RETURN_VALID_TRANSITIONS = {
 export function getReturnActions(status) {
   const labels = {
     Confirmed: "Confirm Pickup",
-    "Picked Up": "Mark Picked Up",
-    Returned: "Mark Returned",
+    Assigned: "Assigned to Delivery Boy",
     "Refund Completed": "Process Refund",
     Cancelled: status === "Placed" ? "Reject" : "Mark Cancelled"
   };
