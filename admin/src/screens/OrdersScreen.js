@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,11 +18,19 @@ function isRefill(order) {
   return order.order_type === "refill" || order.type === "refill";
 }
 
-export default function OrdersScreen({ navigation }) {
+export default function OrdersScreen({ navigation, route }) {
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    const nextFilter = route.params?.filter;
+    if (nextFilter && filters.includes(nextFilter)) {
+      setFilter(nextFilter);
+      navigation.setParams({ filter: undefined });
+    }
+  }, [navigation, route.params?.filter]);
 
   const loadOrders = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);

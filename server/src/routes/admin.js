@@ -55,11 +55,36 @@ const DEMO_DELIVERY_BOYS = [
   { name: "Ramesh Delivery", phone: "+919888888888", is_active: true },
   { name: "Suresh Delivery", phone: "+919777777777", is_active: true }
 ];
+const LOW_STOCK_THRESHOLD = 50;
 
 router.use(requireAdmin);
 
 function devToolsEnabled() {
   return process.env.ADMIN_DEV_TOOLS_ENABLED === "true";
+}
+
+function indiaDayRange(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value;
+  const year = Number(getPart("year"));
+  const month = Number(getPart("month"));
+  const day = Number(getPart("day"));
+  const start = new Date(Date.UTC(year, month - 1, day, -5, -30, 0, 0));
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function countByStatus(items, status) {
+  return items.filter((item) => item.status === status).length;
+}
+
+function sumAmounts(items, field = "amount") {
+  return items.reduce((sum, item) => sum + Number(item[field] || 0), 0);
 }
 
 async function deleteRows(query) {
@@ -139,6 +164,114 @@ async function ensureSingleDefaultAddress(supabase, userId, phone) {
 
 router.get("/dev/status", (_req, res) => {
   res.json({ enabled: devToolsEnabled() });
+});
+
+router.get("/dashboard-summary", async (_req, res, next) => {
+  try {
+    const supabase = requireSupabase();
+    const { start, end } = indiaDayRange();
+    const [
+      ordersResult,
+      todayOrdersResult,
+      todayDeliveredResult,
+      subscriptionsResult,
+      deliveryBoysResult,
+      inventoryResult,
+      paymentsTodayResult,
+      transactionsTodayResult
+    ] = await Promise.all([
+      supabase.from("orders").select("id,status,total_amount,delivery_boy_id,payments(amount,status)"),
+      supabase.from("orders").select("id,status,total_amount,created_at").gte("created_at", start).lt("created_at", end),
+      supabase.from("orders").select("id,status,delivered_at,created_at").or(`and(delivered_at.gte.${start},delivered_at.lt.${end}),and(delivered_at.is.null,status.eq.Delivered,created_at.gte.${start},created_at.lt.${end})`),
+      supabase.from("subscriptions").select("id,status"),
+      supabase.from("delivery_boys").select("id,is_active"),
+      supabase.from("inventory").select("product_id,quantity_available,products(name,unit)").order("quantity_available", { ascending: true }),
+      supabase.from("payments").select("id,amount,status,created_at").gte("created_at", start).lt("created_at", end),
+      supabase.from("transactions").select("id,type,amount,created_at").gte("created_at", start).lt("created_at", end)
+    ]);
+
+    for (const result of [
+      ordersResult,
+      todayOrdersResult,
+      todayDeliveredResult,
+      subscriptionsResult,
+      deliveryBoysResult,
+      inventoryResult,
+      paymentsTodayResult,
+      transactionsTodayResult
+    ]) {
+      if (result.error) throw result.error;
+    }
+
+    const orders = ordersResult.data || [];
+    const todayOrders = todayOrdersResult.data || [];
+    const subscriptions = subscriptionsResult.data || [];
+    const deliveryBoys = deliveryBoysResult.data || [];
+    const inventory = inventoryResult.data || [];
+    const paymentsToday = paymentsTodayResult.data || [];
+    const transactionsToday = transactionsTodayResult.data || [];
+    const lowStockItems = inventory
+      .filter((item) => Number(item.quantity_available) < LOW_STOCK_THRESHOLD)
+      .map((item) => ({
+        product_id: item.product_id,
+        name: item.products?.name || item.product_id,
+        quantity_available: Number(item.quantity_available || 0),
+        unit: item.products?.unit || null
+      }));
+    const pendingDue = orders.reduce((sum, order) => {
+      const paid = (order.payments || [])
+        .filter((payment) => payment.status === "Paid")
+        .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
+      return sum + Math.max(Number(order.total_amount || 0) - paid, 0);
+    }, 0);
+    const paidToday = paymentsToday.filter((payment) => payment.status === "Paid");
+    const walletRefundsToday = transactionsToday.filter((transaction) => transaction.type?.startsWith("refund"));
+
+    res.json({
+      today: {
+        orders: todayOrders.length,
+        delivered: todayDeliveredResult.data?.length || 0,
+        pending: todayOrders.filter((order) => !["Delivered", "Cancelled", "Refund Completed"].includes(order.status)).length,
+        revenue: Number(sumAmounts(paidToday).toFixed(2)),
+        refunds: Number(sumAmounts(walletRefundsToday).toFixed(2))
+      },
+      orders: {
+        placed: countByStatus(orders, "Placed"),
+        confirmed: countByStatus(orders, "Confirmed"),
+        assigned: countByStatus(orders, "Assigned"),
+        pickedUp: countByStatus(orders, "Picked Up"),
+        delivered: countByStatus(orders, "Delivered"),
+        cancelled: countByStatus(orders, "Cancelled")
+      },
+      subscriptions: {
+        active: countByStatus(subscriptions, "Active"),
+        paused: countByStatus(subscriptions, "Paused"),
+        cancellationRequested: countByStatus(subscriptions, "Cancellation Requested"),
+        returnPending: countByStatus(subscriptions, "Return Pending")
+      },
+      delivery: {
+        activeDeliveryBoys: deliveryBoys.filter((boy) => boy.is_active).length,
+        assignedOrders: countByStatus(orders, "Assigned"),
+        unassignedConfirmedOrders: orders.filter((order) => order.status === "Confirmed" && !order.delivery_boy_id).length
+      },
+      inventory: {
+        lowStockCount: lowStockItems.length,
+        lowStockItems
+      },
+      payments: {
+        paidToday: Number(sumAmounts(paidToday).toFixed(2)),
+        pendingDue: Number(pendingDue.toFixed(2)),
+        walletRefundsToday: Number(sumAmounts(walletRefundsToday).toFixed(2))
+      },
+      meta: {
+        timezone: "Asia/Kolkata",
+        dayStart: start,
+        dayEnd: end
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post("/dev/cleanup-test-data", async (req, res, next) => {
