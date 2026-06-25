@@ -234,7 +234,7 @@ export default function SubscriptionsScreen({ navigation }) {
 
         <Text className="text-ink font-extrabold text-lg mb-3">Active Subscriptions</Text>
         {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && activeSubscriptions.length === 0 && <Text className="text-muted mb-4">No active subscriptions yet.</Text>}
+        {!loading && activeSubscriptions.length === 0 && <Text className="text-muted mb-4">No active subscriptions. Start a water jar subscription.</Text>}
         {activeSubscriptions.map((subscription) => {
           const maxJars = Number(subscription.jar_count || subscription.quantity || 1);
           const refillQuantity = refillQuantityFor(subscription);

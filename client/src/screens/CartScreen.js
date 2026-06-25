@@ -218,6 +218,16 @@ export default function CartScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={20} color="#17252A" />
         </TouchableOpacity>
 
+        {!items.length && (
+          <View className="border border-gray-100 rounded-lg p-5 mb-4 items-center">
+            <Ionicons name="cart-outline" size={32} color="#00B5B0" />
+            <Text className="text-ink font-extrabold mt-3">Your cart is empty.</Text>
+            <TouchableOpacity className="bg-primary rounded-lg px-5 py-3 mt-4" onPress={() => navigation.navigate("Products")}>
+              <Text className="text-white font-bold">Browse Products</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {items.map((item) => (
           <View key={item.id} className="flex-row border border-gray-100 rounded-lg p-3 mb-3">
             {item.image_url ? (
@@ -255,7 +265,7 @@ export default function CartScreen({ navigation }) {
           </View>
         ))}
 
-        <View className="border-t border-gray-100 pt-4 mt-2">
+        {items.length > 0 && <View className="border-t border-gray-100 pt-4 mt-2">
           <View className="flex-row justify-between mb-2">
             <Text className="text-muted">Subtotal</Text>
             <Text className="font-bold">₹{total}</Text>
@@ -274,7 +284,7 @@ export default function CartScreen({ navigation }) {
           <TouchableOpacity className="items-center mb-8" onPress={() => navigation.navigate("Payment")}>
             <Text className="text-primary font-bold">Go to payments</Text>
           </TouchableOpacity>
-        </View>
+        </View>}
       </ScrollView>
     </SafeAreaView>
   );
