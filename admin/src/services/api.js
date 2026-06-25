@@ -51,5 +51,7 @@ export const api = {
     request("/admin/approve-return", { method: "POST", body: JSON.stringify({ order_id: orderId, target_status: targetStatus }) }),
   getDevToolsStatus: () => request("/admin/dev/status"),
   cleanupTestData: (phone, confirm) =>
-    request("/admin/dev/cleanup-test-data", { method: "POST", body: JSON.stringify({ phone, confirm }) })
+    request("/admin/dev/cleanup-test-data", { method: "POST", body: JSON.stringify({ phone, confirm }) }),
+  seedDemoData: (confirm) =>
+    request("/admin/dev/seed-demo-data", { method: "POST", body: JSON.stringify({ confirm }) })
 };

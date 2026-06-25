@@ -7,7 +7,54 @@ import { assertValidStatusTransition } from "../utils/orderStatuses.js";
 const router = Router();
 const JAR_DEPOSIT = 250;
 const DEV_CONFIRM_PHRASE = "DELETE TEST DATA";
+const SEED_CONFIRM_PHRASE = "SEED DEMO DATA";
 const TEST_PHONE = "+919999999999";
+const DEMO_PRODUCTS = [
+  {
+    id: "20l-ro-jar",
+    name: "20L RO Purified Jar",
+    description: "Family pack purified RO water jar with sealed cap.",
+    image_url: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?q=80&w=900&auto=format&fit=crop",
+    price: 80,
+    unit: "20L Jar",
+    is_active: true,
+    stock: 350
+  },
+  {
+    id: "10l-ro-jar",
+    name: "10L RO Purified Jar",
+    description: "Compact jar for smaller homes and offices.",
+    image_url: "https://images.unsplash.com/photo-1606168094336-48f205e1fc27?q=80&w=900&auto=format&fit=crop",
+    price: 55,
+    unit: "10L Jar",
+    is_active: true,
+    stock: 160
+  },
+  {
+    id: "1l-bottle-pack",
+    name: "1L Bottle Pack",
+    description: "Pack of 12 mineral-balanced RO bottles.",
+    image_url: "https://images.unsplash.com/photo-1523362628745-0c100150b504?q=80&w=900&auto=format&fit=crop",
+    price: 180,
+    unit: "12 x 1L",
+    is_active: true,
+    stock: 90
+  },
+  {
+    id: "jar-stand",
+    name: "Jar Stand",
+    description: "Durable stand for 20L water jars.",
+    image_url: "https://images.unsplash.com/photo-1559839914-17aae19cec71?q=80&w=900&auto=format&fit=crop",
+    price: 249,
+    unit: "Piece",
+    is_active: true,
+    stock: 40
+  }
+];
+const DEMO_DELIVERY_BOYS = [
+  { name: "Ramesh Delivery", phone: "+919888888888", is_active: true },
+  { name: "Suresh Delivery", phone: "+919777777777", is_active: true }
+];
 
 router.use(requireAdmin);
 
@@ -147,6 +194,81 @@ router.post("/dev/cleanup-test-data", async (req, res, next) => {
       transactionsDeleted,
       addressesDeleted,
       walletReset: true
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/dev/seed-demo-data", async (req, res, next) => {
+  try {
+    if (!devToolsEnabled()) {
+      return res.status(403).json({ error: "Admin dev tools are disabled" });
+    }
+    if (req.body.confirm !== SEED_CONFIRM_PHRASE) {
+      return res.status(400).json({ error: `confirm must be exactly: ${SEED_CONFIRM_PHRASE}` });
+    }
+
+    const supabase = requireSupabase();
+    await ensureTestUser();
+
+    const { error: userError } = await supabase
+      .from("users")
+      .update({ phone: TEST_PHONE, name: "Test Customer", wallet_balance: 0 })
+      .eq("id", TEST_USER_ID);
+    if (userError) throw userError;
+
+    const { error: addressError } = await supabase.from("addresses").upsert(
+      {
+        id: TEST_ADDRESS_ID,
+        user_id: TEST_USER_ID,
+        label: "Home",
+        full_address: "Demo Home Address, TOP-R Test Area",
+        lat: 19.076,
+        lng: 72.8777,
+        is_default: true
+      },
+      { onConflict: "id" }
+    );
+    if (addressError) throw addressError;
+
+    const { error: clearAddressError } = await supabase
+      .from("addresses")
+      .update({ is_default: false })
+      .eq("user_id", TEST_USER_ID)
+      .neq("id", TEST_ADDRESS_ID);
+    if (clearAddressError) throw clearAddressError;
+
+    const { data: deliveryBoys, error: deliveryBoysError } = await supabase
+      .from("delivery_boys")
+      .upsert(DEMO_DELIVERY_BOYS, { onConflict: "phone" })
+      .select("id");
+    if (deliveryBoysError) throw deliveryBoysError;
+
+    const productRows = DEMO_PRODUCTS.map(({ stock, ...product }) => product);
+    const { data: products, error: productsError } = await supabase
+      .from("products")
+      .upsert(productRows, { onConflict: "id" })
+      .select("id");
+    if (productsError) throw productsError;
+
+    const now = new Date().toISOString();
+    const inventoryRows = DEMO_PRODUCTS.map((product) => ({
+      product_id: product.id,
+      quantity_available: product.stock,
+      last_updated: now
+    }));
+    const { error: inventoryError } = await supabase
+      .from("inventory")
+      .upsert(inventoryRows, { onConflict: "product_id" });
+    if (inventoryError) throw inventoryError;
+
+    res.json({
+      userReady: true,
+      defaultAddressReady: true,
+      deliveryBoysReady: deliveryBoys?.length || DEMO_DELIVERY_BOYS.length,
+      productsReady: products?.length || DEMO_PRODUCTS.length,
+      inventoryReady: true
     });
   } catch (error) {
     next(error);
