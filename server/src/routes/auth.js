@@ -29,6 +29,10 @@ export async function ensureTestUser() {
       user_id: TEST_USER_ID,
       label: "Home",
       full_address: "Test address, local development",
+      landmark: "Near TOP-R test gate",
+      area: "TOP-R Test Area",
+      city: "Mumbai",
+      pincode: "400001",
       lat: 19.076,
       lng: 72.8777,
       is_default: true

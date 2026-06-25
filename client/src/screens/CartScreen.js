@@ -6,7 +6,16 @@ import RazorpayCheckout from 'react-native-razorpay';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
-import { getOrCreateMockSession, getSelectedAddress } from "../services/session";
+import { getOrCreateMockSession, getSelectedAddress, saveSelectedAddress } from "../services/session";
+
+function formatAddress(address) {
+  if (!address) return "No address found";
+  return [
+    `${address.label}: ${address.full_address}`,
+    address.landmark ? `Landmark: ${address.landmark}` : null,
+    [address.area, address.city, address.pincode].filter(Boolean).join(", ")
+  ].filter(Boolean).join("\n");
+}
 
 export default function CartScreen({ navigation }) {
   const { items, updateQuantity, total, clearCart } = useCart();
@@ -20,10 +29,16 @@ export default function CartScreen({ navigation }) {
     try {
       const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
-      const savedAddress = await getSelectedAddress();
-      setSelectedAddress(savedAddress);
       if (storedSession?.user?.id) {
-        setAddresses(await api.getAddresses(storedSession.user.id));
+        const addressData = await api.getAddresses(storedSession.user.id);
+        setAddresses(addressData);
+        const savedAddress = await getSelectedAddress();
+        const freshSelectedAddress = savedAddress ? addressData.find((item) => item.id === savedAddress.id) : null;
+        const fallbackAddress = addressData.find((item) => item.is_default) || addressData[0] || null;
+        setSelectedAddress(freshSelectedAddress || fallbackAddress);
+        if (freshSelectedAddress || fallbackAddress) {
+          await saveSelectedAddress(freshSelectedAddress || fallbackAddress);
+        }
       }
     } catch (error) {
       Alert.alert("Cart", error.message);
@@ -111,7 +126,10 @@ export default function CartScreen({ navigation }) {
     }
 
     if (!address?.id) {
-      Alert.alert("Address required", "No delivery address was found for this user.");
+      Alert.alert("Address required", "Add or select a delivery address before checkout.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Add Address", onPress: () => navigation.navigate("AddressBook", { selectMode: true }) }
+      ]);
       return;
     }
 
@@ -194,7 +212,8 @@ export default function CartScreen({ navigation }) {
         >
           <View>
             <Text className="text-xs text-muted">Delivery address</Text>
-            <Text className="text-ink font-bold mt-1">{address ? `${address.label}, ${address.full_address}` : "No address found"}</Text>
+            <Text className="text-ink font-bold mt-1">{formatAddress(address)}</Text>
+            {!address && <Text className="text-red-500 font-bold mt-2">Add an address to continue checkout.</Text>}
           </View>
           <Ionicons name="chevron-forward" size={20} color="#17252A" />
         </TouchableOpacity>

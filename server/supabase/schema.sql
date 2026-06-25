@@ -15,6 +15,10 @@ create table if not exists public.addresses (
   user_id uuid not null references public.users(id) on delete cascade,
   label text not null,
   full_address text not null,
+  landmark text,
+  area text,
+  city text,
+  pincode text,
   lat numeric(10, 7),
   lng numeric(10, 7),
   is_default boolean not null default false

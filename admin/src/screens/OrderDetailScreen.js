@@ -22,6 +22,15 @@ const statusLabels = {
   Cancelled: "Cancel"
 };
 
+function addressLines(address) {
+  if (!address) return ["No address"];
+  return [
+    address.full_address,
+    address.landmark ? `Landmark: ${address.landmark}` : null,
+    [address.area, address.city, address.pincode].filter(Boolean).join(", ")
+  ].filter(Boolean);
+}
+
 export default function OrderDetailScreen({ navigation, route }) {
   const [order, setOrder] = useState(route.params.order);
   const [saving, setSaving] = useState(false);
@@ -129,13 +138,20 @@ export default function OrderDetailScreen({ navigation, route }) {
               <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text>
             </View>
           </View>
-          <Text className="text-muted">Customer: {order.users?.phone || "Unknown"}</Text>
+          <Text className="text-muted">Customer phone: {order.users?.phone || "Unknown"}</Text>
           <Text className="text-muted mt-1">Name: {order.users?.name || "Not set"}</Text>
-          <Text className="text-muted mt-1">Address: {order.addresses?.full_address || "No address"}</Text>
           <Text className="text-muted mt-1">Time: {dateTime(order.created_at)}</Text>
           {order.delivery_boys && <Text className="text-muted mt-1">Delivery boy: {order.delivery_boys.name} • {order.delivery_boys.phone}</Text>}
           <Text className="text-primary text-2xl font-extrabold mt-3">{money(order.total_amount)}</Text>
           {isRefill && <Text className="text-blue-700 font-bold mt-2">Subscription refill — delivery boy picks up empty jars</Text>}
+        </View>
+
+        <Text className="text-ink font-extrabold text-lg mb-3">Delivery Address</Text>
+        <View className="border border-gray-100 rounded-lg p-4 mb-4">
+          {addressLines(order.addresses).map((line) => (
+            <Text key={line} className="text-muted mb-1">{line}</Text>
+          ))}
+          <Text className="text-ink font-bold mt-2">Customer: {order.users?.phone || "Unknown"}</Text>
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Items</Text>

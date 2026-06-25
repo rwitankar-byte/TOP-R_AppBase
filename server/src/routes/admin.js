@@ -115,6 +115,10 @@ async function ensureSingleDefaultAddress(supabase, userId, phone) {
         user_id: TEST_USER_ID,
         label: "Home",
         full_address: "Test address, local development",
+        landmark: "Near TOP-R test gate",
+        area: "TOP-R Test Area",
+        city: "Mumbai",
+        pincode: "400001",
         lat: 19.076,
         lng: 72.8777,
         is_default: true
@@ -154,6 +158,10 @@ async function ensureSingleDefaultAddress(supabase, userId, phone) {
     user_id: userId,
     label: "Home",
     full_address: "Test address, local development",
+    landmark: "Near TOP-R test gate",
+    area: "TOP-R Test Area",
+    city: "Mumbai",
+    pincode: "400001",
     lat: 19.076,
     lng: 72.8777,
     is_default: true
@@ -357,6 +365,10 @@ router.post("/dev/seed-demo-data", async (req, res, next) => {
         user_id: TEST_USER_ID,
         label: "Home",
         full_address: "Demo Home Address, TOP-R Test Area",
+        landmark: "Near TOP-R demo gate",
+        area: "TOP-R Test Area",
+        city: "Mumbai",
+        pincode: "400001",
         lat: 19.076,
         lng: 72.8777,
         is_default: true

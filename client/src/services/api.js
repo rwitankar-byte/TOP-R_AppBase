@@ -24,6 +24,7 @@ export const api = {
   getAddresses: (userId) => request(`/addresses/${userId}`),
   addAddress: (address) => request("/addresses", { method: "POST", body: JSON.stringify(address) }),
   updateAddress: (id, updates) => request(`/addresses/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
+  setDefaultAddress: (id) => request(`/addresses/${id}/default`, { method: "PATCH" }),
   deleteAddress: (id) => request(`/addresses/${id}`, { method: "DELETE" }),
   placeOrder: (order) => request("/orders", { method: "POST", body: JSON.stringify(order) }),
   getOrders: (userId, filters = {}) => {
