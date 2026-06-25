@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ navigation, onLogin }) {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
@@ -40,6 +40,10 @@ export default function LoginScreen({ onLogin }) {
 
       <TouchableOpacity className="bg-primary rounded-lg py-4 items-center" onPress={login}>
         <Text className="text-white font-extrabold text-base">Login</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity className="border border-primary rounded-lg py-4 items-center mt-4" onPress={() => navigation.navigate("DeliveryLogin")}>
+        <Text className="text-primary font-extrabold text-base">Delivery Boy Login</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );

@@ -93,9 +93,13 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!session ? (
-            <Stack.Screen name="Login">
-              {(props) => <LoginScreen {...props} onLogin={handleLogin} />}
-            </Stack.Screen>
+            <>
+              <Stack.Screen name="Login">
+                {(props) => <LoginScreen {...props} onLogin={handleLogin} />}
+              </Stack.Screen>
+              <Stack.Screen name="DeliveryLogin" component={DeliveryLoginScreen} />
+              <Stack.Screen name="DeliveryDashboard" component={DeliveryDashboardScreen} />
+            </>
           ) : (
             <>
               <Stack.Screen name="AdminTabs">

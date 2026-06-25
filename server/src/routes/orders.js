@@ -244,7 +244,7 @@ router.post("/", async (req, res, next) => {
       address_id: address_id || null,
       total_amount: orderTotal,
       delivery_date,
-      status: orderType === "subscription" ? "Delivered" : "Placed",
+      status: "Placed",
       type: storedOrderType,
       subscription_id: ["refill", "return", "subscription"].includes(orderType) ? subscription_id : null
     };
