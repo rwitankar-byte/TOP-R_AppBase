@@ -2,8 +2,8 @@ import { Router } from "express";
 import { supabaseAdmin, supabaseAuth } from "../config/supabase.js";
 
 const router = Router();
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
-const TEST_ADDRESS_ID = "00000000-0000-0000-0000-000000000101";
+export const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
+export const TEST_ADDRESS_ID = "00000000-0000-0000-0000-000000000101";
 
 export async function ensureTestUser() {
   if (!supabaseAdmin) return null;

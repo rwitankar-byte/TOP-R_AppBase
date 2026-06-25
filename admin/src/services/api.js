@@ -48,5 +48,8 @@ export const api = {
   updateDeliveryOrderStatus: (id, deliveryBoyId, status) =>
     request(`/delivery/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ delivery_boy_id: deliveryBoyId, status }) }),
   advanceReturn: (orderId, targetStatus) =>
-    request("/admin/approve-return", { method: "POST", body: JSON.stringify({ order_id: orderId, target_status: targetStatus }) })
+    request("/admin/approve-return", { method: "POST", body: JSON.stringify({ order_id: orderId, target_status: targetStatus }) }),
+  getDevToolsStatus: () => request("/admin/dev/status"),
+  cleanupTestData: (phone, confirm) =>
+    request("/admin/dev/cleanup-test-data", { method: "POST", body: JSON.stringify({ phone, confirm }) })
 };

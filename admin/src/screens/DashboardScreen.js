@@ -23,6 +23,7 @@ export default function DashboardScreen({ navigation, onLogout }) {
   const [returnRequests, setReturnRequests] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [devToolsEnabled, setDevToolsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isFocused = useIsFocused();
@@ -33,16 +34,18 @@ export default function DashboardScreen({ navigation, onLogout }) {
     const request = (async () => {
       if (showLoading) setLoading(true);
       try {
-        const [orderData, returnData, subscriptionData, inventoryData] = await Promise.all([
+        const [orderData, returnData, subscriptionData, inventoryData, devToolsStatus] = await Promise.all([
           api.getOrders(),
           api.getReturnRequests(),
           api.getSubscriptions("Active"),
-          api.getInventory()
+          api.getInventory(),
+          api.getDevToolsStatus().catch(() => ({ enabled: false }))
         ]);
         setOrders(orderData);
         setReturnRequests(returnData);
         setSubscriptions(subscriptionData);
         setInventory(inventoryData);
+        setDevToolsEnabled(Boolean(devToolsStatus.enabled));
       } catch (error) {
         if (!silent) Alert.alert("Dashboard", error.message);
       } finally {
@@ -115,7 +118,8 @@ export default function DashboardScreen({ navigation, onLogout }) {
               ["View Subscriptions", "Subscriptions", "repeat"],
               ["Manage Inventory", "Inventory", "cube"],
               ["Delivery Boys", "DeliveryBoys", "bicycle"],
-              ["Delivery Boy Login", "DeliveryLogin", "car"]
+              ["Delivery Boy Login", "DeliveryLogin", "car"],
+              ...(devToolsEnabled ? [["Dev Tools", "DevTools", "construct"]] : [])
             ].map(([label, route, icon]) => (
               <TouchableOpacity
                 key={route}

@@ -1,12 +1,157 @@
 import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
+import { ensureTestUser, TEST_ADDRESS_ID, TEST_USER_ID } from "./auth.js";
 import { assertValidStatusTransition } from "../utils/orderStatuses.js";
 
 const router = Router();
 const JAR_DEPOSIT = 250;
+const DEV_CONFIRM_PHRASE = "DELETE TEST DATA";
+const TEST_PHONE = "+919999999999";
 
 router.use(requireAdmin);
+
+function devToolsEnabled() {
+  return process.env.ADMIN_DEV_TOOLS_ENABLED === "true";
+}
+
+async function deleteRows(query) {
+  const { data, error } = await query.select("id");
+  if (error) throw error;
+  return data?.length || 0;
+}
+
+async function ensureCleanupUser(supabase, phone) {
+  if (phone === TEST_PHONE) {
+    await ensureTestUser();
+  }
+
+  const { data: user, error } = await supabase
+    .from("users")
+    .select("id,phone")
+    .eq("phone", phone)
+    .maybeSingle();
+  if (error) throw error;
+  return user;
+}
+
+async function ensureSingleDefaultAddress(supabase, userId, phone) {
+  if (phone === TEST_PHONE && userId === TEST_USER_ID) {
+    const { error: upsertError } = await supabase.from("addresses").upsert(
+      {
+        id: TEST_ADDRESS_ID,
+        user_id: TEST_USER_ID,
+        label: "Home",
+        full_address: "Test address, local development",
+        lat: 19.076,
+        lng: 72.8777,
+        is_default: true
+      },
+      { onConflict: "id" }
+    );
+    if (upsertError) throw upsertError;
+
+    const deleted = await deleteRows(
+      supabase.from("addresses").delete().eq("user_id", userId).neq("id", TEST_ADDRESS_ID)
+    );
+    return deleted;
+  }
+
+  const { data: existingAddress, error: lookupError } = await supabase
+    .from("addresses")
+    .select("id")
+    .eq("user_id", userId)
+    .order("is_default", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  if (existingAddress) {
+    const { error: defaultError } = await supabase
+      .from("addresses")
+      .update({ is_default: true })
+      .eq("id", existingAddress.id);
+    if (defaultError) throw defaultError;
+
+    return deleteRows(
+      supabase.from("addresses").delete().eq("user_id", userId).neq("id", existingAddress.id)
+    );
+  }
+
+  const { error: insertError } = await supabase.from("addresses").insert({
+    user_id: userId,
+    label: "Home",
+    full_address: "Test address, local development",
+    lat: 19.076,
+    lng: 72.8777,
+    is_default: true
+  });
+  if (insertError) throw insertError;
+  return 0;
+}
+
+router.get("/dev/status", (_req, res) => {
+  res.json({ enabled: devToolsEnabled() });
+});
+
+router.post("/dev/cleanup-test-data", async (req, res, next) => {
+  try {
+    if (!devToolsEnabled()) {
+      return res.status(403).json({ error: "Admin dev tools are disabled" });
+    }
+
+    const phone = req.body.phone?.trim();
+    if (!phone) return res.status(400).json({ error: "phone is required" });
+    if (req.body.confirm !== DEV_CONFIRM_PHRASE) {
+      return res.status(400).json({ error: `confirm must be exactly: ${DEV_CONFIRM_PHRASE}` });
+    }
+
+    const supabase = requireSupabase();
+    const user = await ensureCleanupUser(supabase, phone);
+    if (!user) return res.status(404).json({ error: "No user found with that phone" });
+
+    const { data: orders, error: orderLookupError } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("user_id", user.id);
+    if (orderLookupError) throw orderLookupError;
+    const orderIds = (orders || []).map((order) => order.id);
+
+    let ordersDeleted = 0;
+    if (orderIds.length) {
+      await deleteRows(supabase.from("order_assignments").delete().in("order_id", orderIds));
+      await deleteRows(supabase.from("order_items").delete().in("order_id", orderIds));
+    }
+
+    const paymentsDeleted = await deleteRows(supabase.from("payments").delete().eq("user_id", user.id));
+    const transactionsDeleted = await deleteRows(supabase.from("transactions").delete().eq("user_id", user.id));
+
+    if (orderIds.length) {
+      ordersDeleted = await deleteRows(supabase.from("orders").delete().in("id", orderIds).eq("user_id", user.id));
+    }
+
+    const subscriptionsDeleted = await deleteRows(supabase.from("subscriptions").delete().eq("user_id", user.id));
+    const addressesDeleted = await ensureSingleDefaultAddress(supabase, user.id, phone);
+
+    const { error: walletError } = await supabase
+      .from("users")
+      .update({ wallet_balance: 0 })
+      .eq("id", user.id)
+      .eq("phone", phone);
+    if (walletError) throw walletError;
+
+    res.json({
+      ordersDeleted,
+      subscriptionsDeleted,
+      paymentsDeleted,
+      transactionsDeleted,
+      addressesDeleted,
+      walletReset: true
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.get("/delivery-boys", async (_req, res, next) => {
   try {

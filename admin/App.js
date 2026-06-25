@@ -12,6 +12,7 @@ import DeliveryBoysScreen from "./src/screens/DeliveryBoysScreen";
 import DeliveryDashboardScreen from "./src/screens/DeliveryDashboardScreen";
 import DeliveryLoginScreen from "./src/screens/DeliveryLoginScreen";
 import DashboardScreen from "./src/screens/DashboardScreen";
+import DevToolsScreen from "./src/screens/DevToolsScreen";
 import InventoryScreen from "./src/screens/InventoryScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import OrderDetailScreen from "./src/screens/OrderDetailScreen";
@@ -112,6 +113,7 @@ export default function App() {
               <Stack.Screen name="DeliveryBoys" component={DeliveryBoysScreen} />
               <Stack.Screen name="DeliveryLogin" component={DeliveryLoginScreen} />
               <Stack.Screen name="DeliveryDashboard" component={DeliveryDashboardScreen} />
+              <Stack.Screen name="DevTools" component={DevToolsScreen} />
             </>
           )}
         </Stack.Navigator>
