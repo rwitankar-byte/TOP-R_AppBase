@@ -84,6 +84,48 @@ function indiaDayRange(date = new Date()) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+function indiaLocalDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short"
+  }).formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value;
+  return {
+    year: Number(getPart("year")),
+    month: Number(getPart("month")),
+    day: Number(getPart("day")),
+    weekday: getPart("weekday")
+  };
+}
+
+function indiaLocalMidnightUtc(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day, -5, -30, 0, 0));
+}
+
+function indiaAnalyticsRanges(date = new Date()) {
+  const { year, month, day, weekday } = indiaLocalDateParts(date);
+  const todayStart = indiaLocalMidnightUtc(year, month, day);
+  const weekOffset = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[weekday] ?? 0;
+  const weekStart = new Date(todayStart);
+  weekStart.setUTCDate(weekStart.getUTCDate() - weekOffset);
+  const monthStart = indiaLocalMidnightUtc(year, month, 1);
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  return {
+    today: { start: todayStart, end: tomorrowStart },
+    week: { start: weekStart, end: tomorrowStart },
+    month: { start: monthStart, end: tomorrowStart }
+  };
+}
+
+function isWithinRange(value, range) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return !Number.isNaN(time) && time >= range.start.getTime() && time < range.end.getTime();
+}
+
 function countByStatus(items, status) {
   return items.filter((item) => item.status === status).length;
 }
@@ -236,6 +278,133 @@ async function ensureSingleDefaultAddress(supabase, userId, phone) {
 
 router.get("/dev/status", (_req, res) => {
   res.json({ enabled: devToolsEnabled() });
+});
+
+router.get("/analytics", async (_req, res, next) => {
+  try {
+    const supabase = requireSupabase();
+    const ranges = indiaAnalyticsRanges();
+    const [
+      ordersResult,
+      paymentsResult,
+      subscriptionsResult,
+      usersResult,
+      orderItemsResult,
+      inventoryResult,
+      transactionsResult
+    ] = await Promise.all([
+      supabase.from("orders").select("id,user_id,status,total_amount,created_at"),
+      supabase.from("payments").select("id,amount,status,created_at"),
+      supabase.from("subscriptions").select("id,status,start_date"),
+      supabase.from("users").select("id,created_at"),
+      supabase.from("order_items").select("quantity,unit_price,products(id,name,unit)"),
+      supabase.from("inventory").select("product_id,quantity_available,products(name,unit)").order("quantity_available", { ascending: true }),
+      supabase.from("transactions").select("id,type,amount,created_at")
+    ]);
+
+    for (const result of [
+      ordersResult,
+      paymentsResult,
+      subscriptionsResult,
+      usersResult,
+      orderItemsResult,
+      inventoryResult,
+      transactionsResult
+    ]) {
+      if (result.error) throw result.error;
+    }
+
+    const orders = ordersResult.data || [];
+    const payments = paymentsResult.data || [];
+    const subscriptions = subscriptionsResult.data || [];
+    const users = usersResult.data || [];
+    const orderItems = orderItemsResult.data || [];
+    const inventory = inventoryResult.data || [];
+    const transactions = transactionsResult.data || [];
+    const paidPayments = payments.filter((payment) => payment.status === "Paid");
+    const pendingPayments = payments.filter((payment) => payment.status === "Pending");
+    const refundTransactions = transactions.filter((transaction) => transaction.type?.startsWith("refund"));
+    const ordersByUser = orders.reduce((map, order) => {
+      map.set(order.user_id, (map.get(order.user_id) || 0) + 1);
+      return map;
+    }, new Map());
+    const productsById = new Map();
+    for (const item of orderItems) {
+      const productId = item.products?.id || item.product_id || item.products?.name || "unknown";
+      const current = productsById.get(productId) || {
+        product_id: productId,
+        name: item.products?.name || productId,
+        unit: item.products?.unit || null,
+        quantity_sold: 0,
+        revenue: 0
+      };
+      current.quantity_sold += Number(item.quantity || 0);
+      current.revenue += Number(item.quantity || 0) * Number(item.unit_price || 0);
+      productsById.set(productId, current);
+    }
+    const topSelling = [...productsById.values()]
+      .sort((a, b) => b.quantity_sold - a.quantity_sold)
+      .slice(0, 5)
+      .map((item) => ({ ...item, revenue: Number(item.revenue.toFixed(2)) }));
+    const lowStock = inventory
+      .filter((item) => Number(item.quantity_available || 0) < LOW_STOCK_THRESHOLD)
+      .map((item) => ({
+        product_id: item.product_id,
+        name: item.products?.name || item.product_id,
+        unit: item.products?.unit || null,
+        quantity_available: Number(item.quantity_available || 0)
+      }));
+    const revenueFor = (range) => Number(sumAmounts(paidPayments.filter((payment) => isWithinRange(payment.created_at, range))).toFixed(2));
+    const ordersFor = (range) => orders.filter((order) => isWithinRange(order.created_at, range)).length;
+    const newSubscriptionsThisMonth = subscriptions.filter((subscription) => isWithinRange(subscription.start_date, ranges.month)).length;
+    const newUsersThisMonth = users.filter((user) => isWithinRange(user.created_at, ranges.month)).length;
+
+    res.json({
+      revenue: {
+        today: revenueFor(ranges.today),
+        week: revenueFor(ranges.week),
+        month: revenueFor(ranges.month),
+        allTime: Number(sumAmounts(paidPayments).toFixed(2))
+      },
+      orders: {
+        today: ordersFor(ranges.today),
+        week: ordersFor(ranges.week),
+        month: ordersFor(ranges.month),
+        allTime: orders.length,
+        delivered: countByStatus(orders, "Delivered"),
+        cancelled: countByStatus(orders, "Cancelled")
+      },
+      subscriptions: {
+        active: countByStatus(subscriptions, "Active"),
+        paused: countByStatus(subscriptions, "Paused"),
+        cancelled: countByStatus(subscriptions, "Cancelled"),
+        newThisMonth: newSubscriptionsThisMonth
+      },
+      customers: {
+        total: users.length,
+        newThisMonth: newUsersThisMonth,
+        repeatCustomers: [...ordersByUser.values()].filter((count) => count > 1).length
+      },
+      products: {
+        topSelling,
+        lowStock
+      },
+      payments: {
+        paid: Number(sumAmounts(paidPayments).toFixed(2)),
+        pending: Number(sumAmounts(pendingPayments).toFixed(2)),
+        refunds: Number(sumAmounts(refundTransactions).toFixed(2))
+      },
+      meta: {
+        timezone: "Asia/Kolkata",
+        todayStart: ranges.today.start.toISOString(),
+        weekStart: ranges.week.start.toISOString(),
+        monthStart: ranges.month.start.toISOString(),
+        rangeEnd: ranges.today.end.toISOString()
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get("/customers", async (_req, res, next) => {

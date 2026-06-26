@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import AnalyticsScreen from "./src/screens/AnalyticsScreen";
 import CustomerDetailScreen from "./src/screens/CustomerDetailScreen";
 import CustomersScreen from "./src/screens/CustomersScreen";
 import DeliveryBoysScreen from "./src/screens/DeliveryBoysScreen";
@@ -108,6 +109,7 @@ export default function App() {
               </Stack.Screen>
               <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
               <Stack.Screen name="ReturnRequests" component={ReturnRequestsScreen} />
+              <Stack.Screen name="Analytics" component={AnalyticsScreen} />
               <Stack.Screen name="SubscriptionDetail" component={SubscriptionDetailScreen} />
               <Stack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
               <Stack.Screen name="DeliveryBoys" component={DeliveryBoysScreen} />

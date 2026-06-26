@@ -167,6 +167,7 @@ export default function DashboardScreen({ navigation, onLogout }) {
             <Section title="Quick Actions">
               {[
                 ["View Orders", "Orders", "receipt"],
+                ["Analytics", "Analytics", "stats-chart"],
                 ["Return Requests", "ReturnRequests", "archive"],
                 ["View Subscriptions", "Subscriptions", "repeat"],
                 ["Manage Inventory", "Inventory", "cube"],

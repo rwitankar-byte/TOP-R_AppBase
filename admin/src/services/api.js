@@ -56,5 +56,6 @@ export const api = {
     request("/admin/dev/cleanup-test-data", { method: "POST", body: JSON.stringify({ phone, confirm }) }),
   seedDemoData: (confirm) =>
     request("/admin/dev/seed-demo-data", { method: "POST", body: JSON.stringify({ confirm }) }),
-  getDashboardSummary: () => request("/admin/dashboard-summary")
+  getDashboardSummary: () => request("/admin/dashboard-summary"),
+  getAnalytics: () => request("/admin/analytics")
 };
