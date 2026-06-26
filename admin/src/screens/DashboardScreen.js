@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { money } from "../utils/format";
@@ -96,15 +98,9 @@ export default function DashboardScreen({ navigation, onLogout }) {
       >
         <ScreenHeader title="Dashboard" subtitle="TOP-R Water operations" rightAction={onLogout} rightIcon="log-out" />
         {loading ? (
-          <ActivityIndicator color="#00B5B0" />
+          <LoadingState message="Loading dashboard..." />
         ) : errorMessage ? (
-          <View className="bg-red-50 border border-red-100 rounded-lg p-4">
-            <Text className="text-red-700 font-extrabold">Dashboard unavailable</Text>
-            <Text className="text-red-600 mt-2">{errorMessage}</Text>
-            <TouchableOpacity className="bg-red-500 rounded-lg py-3 items-center mt-4" onPress={() => loadData()}>
-              <Text className="text-white font-extrabold">Retry</Text>
-            </TouchableOpacity>
-          </View>
+          <ErrorState title="Dashboard unavailable" message={errorMessage} onRetry={() => loadData()} />
         ) : summary ? (
           <>
             <Section title="Today Summary">

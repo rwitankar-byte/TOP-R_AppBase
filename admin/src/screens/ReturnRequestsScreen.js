@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId } from "../utils/format";
@@ -12,12 +15,15 @@ export default function ReturnRequestsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadReturns = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
       setReturns(await api.getReturnRequests());
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Return Requests", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -64,8 +70,11 @@ export default function ReturnRequestsScreen({ navigation }) {
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}>
         <ScreenHeader title="Return Requests" subtitle="Cancellation and return workflow" onBack={navigation.goBack} rightAction={loadReturns} />
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && returns.length === 0 && <Text className="text-muted">No pending returns.</Text>}
+        {loading && <LoadingState message="Loading return requests..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadReturns()} /> : null}
+        {!loading && !errorMessage && returns.length === 0 && (
+          <EmptyState icon="archive-outline" title="No pending returns" message="Customer cancellation and jar return requests will appear here." />
+        )}
         {returns.map((order) => {
           const subscription = order.subscription;
           const jarCount = Number(order.jar_count || subscription?.jar_count || subscription?.quantity || order.order_items?.[0]?.quantity || 1);

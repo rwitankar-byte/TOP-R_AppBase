@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
 
@@ -87,13 +90,16 @@ export default function AllOrdersScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadOrders = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
       const session = await getOrCreateMockSession();
       setOrders(await api.getOrders(session.user.id));
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("All Orders", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -138,9 +144,14 @@ export default function AllOrdersScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && orders.length === 0 && <Text className="text-muted">No orders yet. Place your first order.</Text>}
-        {!loading && orders.length > 0 && visibleOrders.length === 0 && <Text className="text-muted">No orders match your filters.</Text>}
+        {loading && <LoadingState message="Loading orders..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadOrders()} /> : null}
+        {!loading && !errorMessage && orders.length === 0 && (
+          <EmptyState icon="receipt-outline" title="No orders yet" message="Place your first order to see it here." actionLabel="Browse Products" onAction={() => navigation.navigate("Products")} />
+        )}
+        {!loading && !errorMessage && orders.length > 0 && visibleOrders.length === 0 && (
+          <EmptyState icon="search-outline" title="No orders match your filters" message="Try a different filter or search term." />
+        )}
         {visibleOrders.map((order) => {
           const payStatus = paymentStatus(order);
           return (

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
 
@@ -31,6 +34,7 @@ export default function OrderCalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadOrders = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
@@ -38,7 +42,9 @@ export default function OrderCalendarScreen() {
       const session = await getOrCreateMockSession();
       const orderData = await api.getOrders(session.user.id);
       setOrders(orderData.filter(isJarOrder));
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Order Calendar", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -93,7 +99,9 @@ export default function OrderCalendarScreen() {
       >
         <Text className="text-ink text-2xl font-extrabold my-4">Order Calendar</Text>
         {loading ? (
-          <ActivityIndicator color="#00B5B0" />
+          <LoadingState message="Loading order calendar..." />
+        ) : errorMessage ? (
+          <ErrorState message={errorMessage} onRetry={() => loadOrders()} />
         ) : (
           <>
             <Calendar
@@ -108,7 +116,11 @@ export default function OrderCalendarScreen() {
             />
 
             <Text className="text-ink font-extrabold text-lg mt-6 mb-3">{selectedDate}</Text>
-            {selectedOrders.length === 0 && <Text className="text-muted">No orders on this day</Text>}
+            {orders.length === 0 ? (
+              <EmptyState icon="calendar-outline" title="No jar orders yet" message="Subscription and jar delivery orders will appear on this calendar." />
+            ) : selectedOrders.length === 0 ? (
+              <EmptyState icon="calendar-clear-outline" title="No orders on this day" message="Choose a marked date to see jar deliveries." />
+            ) : null}
             {selectedOrders.map((order) => (
               <View key={order.id} className="border border-gray-100 rounded-lg p-4 mb-3">
                 <View className="flex-row justify-between items-center">

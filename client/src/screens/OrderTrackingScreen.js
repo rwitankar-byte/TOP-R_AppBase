@@ -3,6 +3,9 @@ import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getSession } from "../services/session";
 
@@ -31,6 +34,8 @@ function orderLabel(order) {
 
 export default function OrderTrackingScreen({ route }) {
   const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const isFocused = useIsFocused();
   const inFlightRequest = useRef(null);
@@ -41,14 +46,18 @@ export default function OrderTrackingScreen({ route }) {
     if (inFlightRequest.current) return inFlightRequest.current;
     const request = (async () => {
       try {
+        if (!silent && !order) setLoading(true);
         const storedSession = await getSession();
         if (!storedSession?.user?.id) return;
         const orders = await api.getOrders(storedSession.user.id);
         const selected = orders.find((item) => item.id === route.params?.orderId) || orders[0];
         setOrder(selected);
+        setErrorMessage("");
       } catch (error) {
+        setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
         if (!silent) Alert.alert("Order tracking", error.message);
       } finally {
+        setLoading(false);
         inFlightRequest.current = null;
       }
     })();
@@ -79,6 +88,13 @@ export default function OrderTrackingScreen({ route }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <Text className="text-ink text-2xl font-extrabold my-4">Track Order</Text>
+        {loading && <LoadingState message="Loading order status..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadOrder()} /> : null}
+        {!loading && !errorMessage && !order ? (
+          <EmptyState icon="navigate-outline" title="No active order found" message="Place an order to track delivery status here." />
+        ) : null}
+        {order ? (
+          <>
         <View className="border border-gray-100 rounded-lg p-4 mb-4">
           <Text className="text-primary font-bold">{orderLabel(order)}</Text>
           <Text className="text-ink font-extrabold mt-1">{order?.id ? `#${order.id.slice(0, 8)}` : route.params?.orderId || "Latest"}</Text>
@@ -113,6 +129,8 @@ export default function OrderTrackingScreen({ route }) {
             <Text className="text-muted">Delivery boy will be assigned after confirmation.</Text>
           )}
         </View>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

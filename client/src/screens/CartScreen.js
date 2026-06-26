@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import RazorpayCheckout from 'react-native-razorpay';
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
 import { getOrCreateMockSession, getSelectedAddress, saveSelectedAddress } from "../services/session";
@@ -23,6 +25,7 @@ export default function CartScreen({ navigation }) {
   const [addresses, setAddresses] = useState([]);
   const [placing, setPlacing] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(null);
+  const [addressError, setAddressError] = useState("");
   const address = selectedAddress || addresses.find((item) => item.is_default) || addresses[0];
 
   const loadAddresses = useCallback(async () => {
@@ -39,8 +42,10 @@ export default function CartScreen({ navigation }) {
         if (freshSelectedAddress || fallbackAddress) {
           await saveSelectedAddress(freshSelectedAddress || fallbackAddress);
         }
+        setAddressError("");
       }
     } catch (error) {
+      setAddressError(error.message || "Unable to load addresses.");
       Alert.alert("Cart", error.message);
     }
   }, []);
@@ -217,15 +222,10 @@ export default function CartScreen({ navigation }) {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#17252A" />
         </TouchableOpacity>
+        {addressError ? <ErrorState title="Address unavailable" message={addressError} onRetry={loadAddresses} /> : null}
 
         {!items.length && (
-          <View className="border border-gray-100 rounded-lg p-5 mb-4 items-center">
-            <Ionicons name="cart-outline" size={32} color="#00B5B0" />
-            <Text className="text-ink font-extrabold mt-3">Your cart is empty.</Text>
-            <TouchableOpacity className="bg-primary rounded-lg px-5 py-3 mt-4" onPress={() => navigation.navigate("Products")}>
-              <Text className="text-white font-bold">Browse Products</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState icon="cart-outline" title="Your cart is empty." message="Add products or a subscription to continue checkout." actionLabel="Browse Products" onAction={() => navigation.navigate("Products")} />
         )}
 
         {items.map((item) => (

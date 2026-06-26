@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId, statusClass } from "../utils/format";
@@ -52,13 +55,16 @@ export default function CustomerDetailScreen({ navigation, route }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadCustomer = useCallback(async ({ showLoading = true } = {}) => {
     if (!customerId) return;
     if (showLoading) setLoading(true);
     try {
       setDetail(await api.getCustomer(customerId));
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Customer detail", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -94,10 +100,11 @@ export default function CustomerDetailScreen({ navigation, route }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <ScreenHeader title="Customer Detail" subtitle={user.phone || "Customer"} onBack={navigation.goBack} />
-        {loading && <ActivityIndicator color="#00B5B0" />}
+        {loading && <LoadingState message="Loading customer details..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadCustomer()} /> : null}
 
-        {!loading && !detail && <Text className="text-muted">Customer details could not be loaded.</Text>}
-        {detail && (
+        {!loading && !errorMessage && !detail && <EmptyState icon="person-outline" title="Customer details unavailable" message="Pull to refresh or try again later." />}
+        {detail && !errorMessage && (
           <>
             <SectionTitle>Profile</SectionTitle>
             <View className="border border-gray-100 rounded-lg p-4 mb-2">
@@ -122,7 +129,7 @@ export default function CustomerDetailScreen({ navigation, route }) {
             </View>
 
             <SectionTitle>Active Subscriptions</SectionTitle>
-            {activeSubscriptions.length === 0 && <Text className="text-muted">No active subscriptions.</Text>}
+            {activeSubscriptions.length === 0 && <EmptyState icon="repeat-outline" title="No active subscriptions" message="This customer does not currently have an active subscription." />}
             {activeSubscriptions.map((subscription) => (
               <TouchableOpacity
                 key={subscription.id}
@@ -142,7 +149,7 @@ export default function CustomerDetailScreen({ navigation, route }) {
             ))}
 
             <SectionTitle>Recent Orders</SectionTitle>
-            {orders.length === 0 && <Text className="text-muted">No orders yet.</Text>}
+            {orders.length === 0 && <EmptyState icon="receipt-outline" title="No orders yet" message="This customer's order history will appear here." />}
             {orders.slice(0, 8).map((order) => (
               <TouchableOpacity
                 key={order.id}

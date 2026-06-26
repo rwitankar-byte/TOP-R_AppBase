@@ -4,6 +4,8 @@ import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ProductCard from "../components/ProductCard";
 import { banners, categories, products as fallbackProducts } from "../data/products";
 import { api } from "../services/api";
@@ -25,13 +27,24 @@ export default function HomeScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [locationLabel, setLocationLabel] = useState("Finding location...");
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState("");
   const popular = (products.length ? products : fallbackProducts).slice(0, 4);
   const latestActiveOrder = useMemo(() => orders
     .filter((order) => activeStatuses.includes(order.status))
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0], [orders]);
 
   useEffect(() => {
-    api.getProducts().then(setProducts).catch((error) => Alert.alert("Products", error.message));
+    api.getProducts()
+      .then((data) => {
+        setProducts(data || []);
+        setProductsError("");
+      })
+      .catch((error) => {
+        setProductsError(error.message || "Unable to connect. Check your internet and try again.");
+        Alert.alert("Products", error.message);
+      })
+      .finally(() => setProductsLoading(false));
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -121,6 +134,14 @@ export default function HomeScreen({ navigation }) {
             <Text className="text-primary font-bold">View all</Text>
           </TouchableOpacity>
         </View>
+        {productsLoading && <LoadingState message="Loading products..." />}
+        {!productsLoading && productsError ? <ErrorState message={productsError} onRetry={() => {
+          setProductsLoading(true);
+          api.getProducts().then((data) => {
+            setProducts(data || []);
+            setProductsError("");
+          }).catch((error) => setProductsError(error.message || "Unable to connect. Check your internet and try again.")).finally(() => setProductsLoading(false));
+        }} /> : null}
         <FlatList
           horizontal
           data={popular}

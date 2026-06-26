@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
 
@@ -21,13 +24,16 @@ export default function TransactionHistoryScreen() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadPayments = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
       const session = await getOrCreateMockSession();
       setPayments(await api.getPayments(session.user.id));
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Transaction History", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -54,8 +60,9 @@ export default function TransactionHistoryScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <Text className="text-ink text-2xl font-extrabold my-4">Transaction History</Text>
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && payments.length === 0 && <Text className="text-muted">No transactions yet.</Text>}
+        {loading && <LoadingState message="Loading transactions..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadPayments()} /> : null}
+        {!loading && !errorMessage && payments.length === 0 && <EmptyState icon="card-outline" title="No transactions yet" message="Payments and refunds will appear here." />}
         {payments.map((payment) => (
           <View key={payment.id} className="border border-gray-100 rounded-lg p-4 mb-3">
             <View className="flex-row justify-between items-center">

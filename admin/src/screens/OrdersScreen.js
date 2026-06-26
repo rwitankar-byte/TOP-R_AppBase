@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId } from "../utils/format";
@@ -99,6 +102,7 @@ export default function OrdersScreen({ navigation, route }) {
   const [sort, setSort] = useState("Newest first");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const nextFilter = route.params?.initialFilter || route.params?.filter;
@@ -112,7 +116,9 @@ export default function OrdersScreen({ navigation, route }) {
     if (showLoading) setLoading(true);
     try {
       setOrders(await api.getOrders());
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Orders", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -196,8 +202,11 @@ export default function OrdersScreen({ navigation, route }) {
           ))}
         </ScrollView>
 
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && visibleOrders.length === 0 && <Text className="text-muted">No orders found.</Text>}
+        {loading && <LoadingState message="Loading orders..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadOrders()} /> : null}
+        {!loading && !errorMessage && visibleOrders.length === 0 && (
+          <EmptyState icon="receipt-outline" title="No orders found" message="Orders matching this view will appear here." />
+        )}
         {visibleOrders.map((order) => {
           const type = orderType(order);
           return (

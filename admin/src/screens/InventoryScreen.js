@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 
@@ -9,12 +12,15 @@ export default function InventoryScreen() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadInventory = async () => {
     setLoading(true);
     try {
       setInventory(await api.getInventory());
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Inventory", error.message);
     } finally {
       setLoading(false);
@@ -42,8 +48,11 @@ export default function InventoryScreen() {
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
         <ScreenHeader title="Inventory" subtitle="Current stock levels" rightAction={loadInventory} />
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && inventory.length === 0 && <Text className="text-muted">No inventory found.</Text>}
+        {loading && <LoadingState message="Loading inventory..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={loadInventory} /> : null}
+        {!loading && !errorMessage && inventory.length === 0 && (
+          <EmptyState icon="cube-outline" title="No inventory found" message="Seed products or add stock to begin tracking inventory." />
+        )}
         {inventory.map((item) => {
           const lowStock = Number(item.quantity_available) < 50;
           return (

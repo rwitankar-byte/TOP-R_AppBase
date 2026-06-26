@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
@@ -50,6 +53,7 @@ export default function SubscriptionsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const jars = Math.max(1, Number(jarCount || 1));
   const jarDeposit = jars * JAR_DEPOSIT;
@@ -70,7 +74,9 @@ export default function SubscriptionsScreen({ navigation }) {
       if (storedSession?.user?.id) {
         setSubscriptions(await api.getSubscriptions(storedSession.user.id));
       }
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Subscriptions", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -192,6 +198,10 @@ export default function SubscriptionsScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <Text className="text-ink text-2xl font-extrabold my-4">Subscriptions</Text>
+        {loading && <LoadingState message="Loading subscriptions..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadData()} /> : null}
+        {!errorMessage && (
+          <>
         <Text className="text-ink font-extrabold text-lg mb-3">New Subscription</Text>
         <View className="border border-gray-100 rounded-lg p-4 mb-5">
           <Text className="text-muted text-xs mb-1">Subscription product</Text>
@@ -224,8 +234,9 @@ export default function SubscriptionsScreen({ navigation }) {
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Active Subscriptions</Text>
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && activeSubscriptions.length === 0 && <Text className="text-muted mb-4">No active subscriptions. Start a water jar subscription.</Text>}
+        {!loading && activeSubscriptions.length === 0 && (
+          <EmptyState icon="repeat-outline" title="No active subscriptions" message="Start a 20L jar subscription to request refills on demand." />
+        )}
         {activeSubscriptions.map((subscription) => {
           const maxJars = Number(subscription.jar_count || subscription.quantity || 1);
           const refillQuantity = refillQuantityFor(subscription);
@@ -288,6 +299,8 @@ export default function SubscriptionsScreen({ navigation }) {
                 <Text className="text-ink font-bold mt-3">{returnMessage(subscription.status)}</Text>
               </View>
             ))}
+          </>
+        )}
           </>
         )}
         <View className="h-8" />

@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, statusClass } from "../utils/format";
@@ -16,6 +19,7 @@ export default function SubscriptionsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadSubscriptions = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
@@ -32,7 +36,9 @@ export default function SubscriptionsScreen({ navigation }) {
             getReturnActions(order.status).length > 0
         )
       );
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Subscriptions", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -81,10 +87,13 @@ export default function SubscriptionsScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <ScreenHeader title="Subscriptions" subtitle="Customer jar ownership" rightAction={loadSubscriptions} />
-        {loading && <ActivityIndicator color="#00B5B0" />}
+        {loading && <LoadingState message="Loading subscriptions..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadSubscriptions()} /> : null}
 
         <Text className="text-ink font-extrabold text-lg mb-3">Active Subscriptions</Text>
-        {!loading && activeSubscriptions.length === 0 && <Text className="text-muted mb-5">No active subscriptions found.</Text>}
+        {!loading && !errorMessage && activeSubscriptions.length === 0 && (
+          <EmptyState icon="repeat-outline" title="No active subscriptions found" message="Active customer subscriptions will appear here." />
+        )}
         {activeSubscriptions.map((subscription) => (
           <TouchableOpacity
             key={subscription.id}
@@ -102,7 +111,9 @@ export default function SubscriptionsScreen({ navigation }) {
         ))}
 
         <Text className="text-ink font-extrabold text-lg mt-3 mb-3">Cancellation / Return Requests</Text>
-        {!loading && cancellationRequests.length === 0 && <Text className="text-muted mb-5">No cancellation or return requests.</Text>}
+        {!loading && !errorMessage && cancellationRequests.length === 0 && (
+          <EmptyState icon="archive-outline" title="No cancellation or return requests" message="Pending subscription returns will appear here." />
+        )}
         {cancellationRequests.map((order) => {
           const subscription = order.subscription;
           const jarCount = Number(order.jar_count || subscription?.jar_count || subscription?.quantity || order.order_items?.[0]?.quantity || 1);

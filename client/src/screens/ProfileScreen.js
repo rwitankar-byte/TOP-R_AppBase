@@ -10,6 +10,8 @@ import {
   SUPPORT_WHATSAPP,
   SUPPORT_WHATSAPP_MESSAGE
 } from "../config/support";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { clearSession, getOrCreateMockSession } from "../services/session";
 
@@ -54,13 +56,24 @@ function Row({ label, onPress }) {
 
 export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
+  const loadProfile = () => {
+    setLoading(true);
     getOrCreateMockSession().then(async (storedSession) => {
       if (storedSession?.user?.id) {
         setProfile(await api.getUser(storedSession.user.id));
       }
-    }).catch((error) => Alert.alert("Profile", error.message));
+      setErrorMessage("");
+    }).catch((error) => {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
+      Alert.alert("Profile", error.message);
+    }).finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadProfile();
   }, []);
 
   const logout = async () => {
@@ -98,6 +111,8 @@ export default function ProfileScreen({ navigation }) {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
+        {loading && <LoadingState message="Loading profile..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={loadProfile} /> : null}
         <View className="flex-row items-center py-5">
           <View className="w-16 h-16 rounded-full bg-primary items-center justify-center">
             <Ionicons name="person" size={34} color="#fff" />

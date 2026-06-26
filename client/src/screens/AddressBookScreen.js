@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getOrCreateMockSession, saveSelectedAddress } from "../services/session";
 
@@ -34,6 +37,7 @@ export default function AddressBookScreen({ navigation, route }) {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -48,7 +52,9 @@ export default function AddressBookScreen({ navigation, route }) {
       const storedSession = await getOrCreateMockSession();
       setSession(storedSession);
       setAddresses(await api.getAddresses(storedSession.user.id));
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Address Book", error.message);
     } finally {
       setLoading(false);
@@ -206,8 +212,11 @@ export default function AddressBookScreen({ navigation, route }) {
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Saved Addresses</Text>
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && addresses.length === 0 && <Text className="text-muted">No saved addresses yet.</Text>}
+        {loading && <LoadingState message="Loading saved addresses..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={loadAddresses} /> : null}
+        {!loading && !errorMessage && addresses.length === 0 && (
+          <EmptyState icon="location-outline" title="No saved addresses yet" message="Add a delivery address before checkout." />
+        )}
         {addresses.map((address) => (
           <TouchableOpacity key={address.id} className="border border-gray-100 rounded-lg p-4 mb-3" onPress={() => pickAddress(address)} activeOpacity={selectMode ? 0.6 : 1}>
             <View className="flex-row justify-between items-center">

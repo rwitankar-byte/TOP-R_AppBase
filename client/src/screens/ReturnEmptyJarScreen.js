@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
 
@@ -24,6 +27,7 @@ export default function ReturnEmptyJarScreen() {
   const [pendingReturns, setPendingReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadReturnData = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
@@ -36,7 +40,9 @@ export default function ReturnEmptyJarScreen() {
       ]);
       setSubscriptions(subscriptionData.filter((subscription) => ["Active", "Paused", ...returnStatuses].includes(subscription.status)));
       setPendingReturns(returnData);
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Return Empty Jar", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -105,8 +111,11 @@ export default function ReturnEmptyJarScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <Text className="text-ink text-2xl font-extrabold my-4">Return Empty Jar</Text>
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && subscriptions.length === 0 && <Text className="text-muted">No return requests yet.</Text>}
+        {loading && <LoadingState message="Loading return requests..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadReturnData()} /> : null}
+        {!loading && !errorMessage && subscriptions.length === 0 && (
+          <EmptyState icon="archive-outline" title="No return requests yet" message="Active subscriptions that can be returned will appear here." />
+        )}
         {subscriptions.map((subscription) => {
           const jars = Number(subscription.jar_count || subscription.quantity || 1);
           const pendingReturn = findPendingReturn(subscription);

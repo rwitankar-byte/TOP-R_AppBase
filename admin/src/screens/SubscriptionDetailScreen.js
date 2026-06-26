@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money, shortId, statusClass } from "../utils/format";
@@ -13,6 +16,7 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadDetails = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
@@ -20,7 +24,9 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
       const [returns, refills] = await Promise.all([api.getReturnRequests(), api.getSubscriptionRefills(subscription.id)]);
       setReturnOrders(returns.filter((order) => order.subscription_id === subscription.id || order.subscription?.id === subscription.id));
       setRefillOrders(refills);
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Subscription details", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -80,8 +86,9 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Refill history ({refillOrders.length})</Text>
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && refillOrders.length === 0 && <Text className="text-muted mb-4">No refills have been requested.</Text>}
+        {loading && <LoadingState message="Loading subscription details..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadDetails()} /> : null}
+        {!loading && !errorMessage && refillOrders.length === 0 && <EmptyState icon="water-outline" title="No refills requested" message="Refill history for this subscription will appear here." />}
         {refillOrders.map((order) => (
           <View key={order.id} className="border border-gray-100 rounded-lg p-4 mb-3">
             <View className="flex-row justify-between"><Text className="text-ink font-extrabold">{shortId(order.id)}</Text><Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text></View>
@@ -91,7 +98,7 @@ export default function SubscriptionDetailScreen({ navigation, route }) {
         ))}
 
         <Text className="text-ink font-extrabold text-lg mt-4 mb-3">Return Request</Text>
-        {!loading && returnOrders.length === 0 && <Text className="text-muted">No active return request.</Text>}
+        {!loading && !errorMessage && returnOrders.length === 0 && <EmptyState icon="archive-outline" title="No active return request" message="Cancellation and jar returns will appear here." />}
         {returnOrders.map((order) => {
           const jarCount = Number(order.jar_count || subscription.jar_count || subscription.quantity || 1);
           return (

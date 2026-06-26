@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import RazorpayCheckout from "react-native-razorpay";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import { api } from "../services/api";
 import { getSession } from "../services/session";
 
@@ -10,8 +13,11 @@ export default function PaymentScreen() {
   const [transactions, setTransactions] = useState([]);
   const [session, setSession] = useState(null);
   const [paying, setPaying] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadPayments = async () => {
+    setLoading(true);
     try {
       const storedSession = await getSession();
       if (!storedSession?.user?.id) return;
@@ -22,8 +28,12 @@ export default function PaymentScreen() {
       ]);
       setDue(Number(dueData.due_amount || 0));
       setTransactions(paymentData);
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Payments", error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,6 +97,10 @@ export default function PaymentScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
+        {loading && <LoadingState message="Loading payments..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={loadPayments} /> : null}
+        {!loading && !errorMessage ? (
+          <>
         <View className="bg-primary rounded-lg p-5 my-4">
           <Text className="text-white">Due amount</Text>
           <Text className="text-white text-4xl font-extrabold mt-2">₹{due}</Text>
@@ -97,6 +111,7 @@ export default function PaymentScreen() {
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Transaction history</Text>
+        {transactions.length === 0 && <EmptyState icon="card-outline" title="No transactions yet" message="Payments and refunds will appear here." />}
         {transactions.map((transaction) => (
           <View key={transaction.id} className="border border-gray-100 rounded-lg p-4 mb-3">
             <View className="flex-row justify-between">
@@ -108,6 +123,8 @@ export default function PaymentScreen() {
             </Text>
           </View>
         ))}
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

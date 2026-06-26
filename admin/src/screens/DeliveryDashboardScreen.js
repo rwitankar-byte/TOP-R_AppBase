@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { shortId, statusClass } from "../utils/format";
@@ -16,12 +19,15 @@ export default function DeliveryDashboardScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadOrders = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
       setOrders(await api.getDeliveryOrders(deliveryBoy.id));
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Delivery dashboard", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -57,8 +63,11 @@ export default function DeliveryDashboardScreen({ navigation, route }) {
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}>
         <ScreenHeader title="My Deliveries" subtitle={`${deliveryBoy.name} • ${deliveryBoy.phone}`} onBack={navigation.goBack} rightAction={loadOrders} />
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && orders.length === 0 && <Text className="text-muted">No active assigned orders.</Text>}
+        {loading && <LoadingState message="Loading assigned orders..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadOrders()} /> : null}
+        {!loading && !errorMessage && orders.length === 0 && (
+          <EmptyState icon="file-tray-outline" title="No active assigned orders" message="Assigned deliveries will appear here." />
+        )}
         {orders.map((order) => {
           const targetStatus = order.status === "Assigned" ? "Picked Up" : isReturn(order) ? "Returned" : "Delivered";
           return (

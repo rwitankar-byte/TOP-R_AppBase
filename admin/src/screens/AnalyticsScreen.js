@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { money } from "../utils/format";
@@ -68,13 +71,8 @@ export default function AnalyticsScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#00B5B0"]} tintColor="#00B5B0" />}
       >
         <ScreenHeader title="Analytics" subtitle="Business performance" onBack={navigation.goBack} />
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && errorMessage ? (
-          <View className="bg-red-50 border border-red-100 rounded-lg p-4">
-            <Text className="text-red-700 font-extrabold">Analytics unavailable</Text>
-            <Text className="text-red-600 mt-2">{errorMessage}</Text>
-          </View>
-        ) : null}
+        {loading && <LoadingState message="Loading analytics..." />}
+        {!loading && errorMessage ? <ErrorState title="Analytics unavailable" message={errorMessage} onRetry={() => loadAnalytics()} /> : null}
 
         {analytics && (
           <>
@@ -111,7 +109,7 @@ export default function AnalyticsScreen({ navigation }) {
 
             <Section title="Products">
               <Text className="text-ink font-bold mb-2">Top selling products</Text>
-              {analytics.products.topSelling.length === 0 && <Text className="text-muted mb-3">No product sales yet.</Text>}
+              {analytics.products.topSelling.length === 0 && <EmptyState icon="stats-chart-outline" title="No product sales yet" message="Top-selling products will appear after orders are placed." />}
               {analytics.products.topSelling.map((product) => (
                 <View key={product.product_id} className="border border-gray-100 rounded-lg p-4 mb-3">
                   <View className="flex-row justify-between">
@@ -123,7 +121,7 @@ export default function AnalyticsScreen({ navigation }) {
               ))}
 
               <Text className="text-ink font-bold mt-2 mb-2">Low stock products</Text>
-              {analytics.products.lowStock.length === 0 && <Text className="text-muted">No low stock products.</Text>}
+              {analytics.products.lowStock.length === 0 && <EmptyState icon="cube-outline" title="No low stock products" message="Inventory is currently above the low-stock threshold." />}
               {analytics.products.lowStock.map((product) => (
                 <View key={product.product_id} className="bg-red-50 border border-red-100 rounded-lg p-4 mb-3">
                   <View className="flex-row justify-between">

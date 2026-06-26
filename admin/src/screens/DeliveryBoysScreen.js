@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 
@@ -12,12 +15,15 @@ export default function DeliveryBoysScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadDeliveryBoys = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
       setDeliveryBoys(await api.getDeliveryBoys());
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Delivery Boys", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -76,8 +82,11 @@ export default function DeliveryBoysScreen({ navigation }) {
             <Text className="text-white font-extrabold">{saving ? "Adding..." : "Add Delivery Boy"}</Text>
           </TouchableOpacity>
         </View>
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && deliveryBoys.length === 0 && <Text className="text-muted">No delivery boys added yet.</Text>}
+        {loading && <LoadingState message="Loading delivery boys..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadDeliveryBoys()} /> : null}
+        {!loading && !errorMessage && deliveryBoys.length === 0 && (
+          <EmptyState icon="bicycle-outline" title="No delivery boys added yet" message="Add a delivery boy to start assigning orders." />
+        )}
         {deliveryBoys.map((deliveryBoy) => (
           <View key={deliveryBoy.id} className="border border-gray-100 rounded-lg p-4 mb-3">
             <View className="flex-row justify-between items-center">

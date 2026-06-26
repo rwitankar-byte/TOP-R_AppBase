@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "../components/EmptyState";
+import ErrorState from "../components/ErrorState";
+import LoadingState from "../components/LoadingState";
 import ScreenHeader from "../components/ScreenHeader";
 import { api } from "../services/api";
 import { dateTime, money } from "../utils/format";
@@ -37,12 +40,15 @@ export default function CustomersScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadCustomers = useCallback(async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
       setCustomers(await api.getCustomers());
+      setErrorMessage("");
     } catch (error) {
+      setErrorMessage(error.message || "Unable to connect. Check your internet and try again.");
       Alert.alert("Customers", error.message);
     } finally {
       if (showLoading) setLoading(false);
@@ -109,9 +115,10 @@ export default function CustomersScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {loading && <ActivityIndicator color="#00B5B0" />}
-        {!loading && visibleCustomers.length === 0 && (
-          <Text className="text-muted">No customers match your search.</Text>
+        {loading && <LoadingState message="Loading customers..." />}
+        {!loading && errorMessage ? <ErrorState message={errorMessage} onRetry={() => loadCustomers()} /> : null}
+        {!loading && !errorMessage && visibleCustomers.length === 0 && (
+          <EmptyState icon="people-outline" title="No customers found" message="Customers matching this search will appear here." />
         )}
 
         {visibleCustomers.map((customer) => (
