@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SUPPORT_EMAIL,
+  SUPPORT_EMAIL_SUBJECT,
+  SUPPORT_PHONE_DISPLAY,
+  SUPPORT_PHONE_TEL,
+  SUPPORT_WHATSAPP,
+  SUPPORT_WHATSAPP_MESSAGE
+} from "../config/support";
 import { api } from "../services/api";
 import { clearSession, getOrCreateMockSession } from "../services/session";
 
@@ -12,7 +20,7 @@ const sections = [
   },
   {
     title: "Customer Support",
-    items: ["Contact Information", "Chat With Us", "FAQ", "Locate Us"]
+    items: ["Call Support", "WhatsApp Support", "Email Support", "FAQ", "Locate Us"]
   },
   {
     title: "Rewards",
@@ -30,7 +38,9 @@ const routeMap = {
   "Favorite Orders": "FavoriteOrders",
   "Address Book": "AddressBook",
   "Transaction History": "TransactionHistory",
-  "Return Empty Jar": "ReturnEmptyJar"
+  "Return Empty Jar": "ReturnEmptyJar",
+  FAQ: "FAQ",
+  "Locate Us": "LocateUs"
 };
 
 function Row({ label, onPress }) {
@@ -58,6 +68,33 @@ export default function ProfileScreen({ navigation }) {
     navigation.replace("Auth");
   };
 
+  const openSupportLink = async (url, fallbackMessage) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert("Support", fallbackMessage);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert("Support", fallbackMessage);
+    }
+  };
+
+  const supportActions = {
+    "Call Support": () => openSupportLink(`tel:${SUPPORT_PHONE_TEL}`, `Unable to open dialer. Please call ${SUPPORT_PHONE_DISPLAY}.`),
+    "WhatsApp Support": () =>
+      openSupportLink(
+        `whatsapp://send?phone=${SUPPORT_WHATSAPP}&text=${encodeURIComponent(SUPPORT_WHATSAPP_MESSAGE)}`,
+        `Unable to open WhatsApp. Please message or call ${SUPPORT_PHONE_DISPLAY}.`
+      ),
+    "Email Support": () =>
+      openSupportLink(
+        `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_EMAIL_SUBJECT)}`,
+        `Unable to open email. Please email ${SUPPORT_EMAIL}.`
+      )
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView className="px-4">
@@ -82,7 +119,7 @@ export default function ProfileScreen({ navigation }) {
               <Row
                 key={item}
                 label={item}
-                onPress={routeMap[item] ? () => navigation.navigate(routeMap[item]) : undefined}
+                onPress={supportActions[item] || (routeMap[item] ? () => navigation.navigate(routeMap[item]) : undefined)}
               />
             ))}
           </View>

@@ -7,7 +7,9 @@ import { CartProvider } from "./src/context/CartContext";
 import AddressBookScreen from "./src/screens/AddressBookScreen";
 import AllOrdersScreen from "./src/screens/AllOrdersScreen";
 import AuthScreen from "./src/screens/AuthScreen";
+import FAQScreen from "./src/screens/FAQScreen";
 import FavoriteOrdersScreen from "./src/screens/FavoriteOrdersScreen";
+import LocateUsScreen from "./src/screens/LocateUsScreen";
 import OrderCalendarScreen from "./src/screens/OrderCalendarScreen";
 import OrderTrackingScreen from "./src/screens/OrderTrackingScreen";
 import PaymentScreen from "./src/screens/PaymentScreen";
@@ -76,6 +78,8 @@ export default function App() {
           <Stack.Screen name="ReturnEmptyJar" component={ReturnEmptyJarScreen} options={{ title: "Return Empty Jar" }} />
           <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ title: "Order Tracking" }} />
           <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: "Payments" }} />
+          <Stack.Screen name="FAQ" component={FAQScreen} options={{ title: "FAQ" }} />
+          <Stack.Screen name="LocateUs" component={LocateUsScreen} options={{ title: "Locate Us" }} />
         </Stack.Navigator>
       </NavigationContainer>
     </CartProvider>
