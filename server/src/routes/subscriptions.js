@@ -5,6 +5,7 @@ import { requireAdmin } from "../middleware/admin.js";
 const router = Router();
 const JAR_DEPOSIT = 250;
 const WATER_CHARGE = 40;
+const SUBSCRIPTION_PRODUCT_ID = "20l-ro-jar";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 router.post("/", async (req, res, next) => {
@@ -12,6 +13,9 @@ router.post("/", async (req, res, next) => {
     const { user_id, product_id, address_id, frequency, start_date, quantity, jar_count, status } = req.body;
     if (!user_id || !product_id) {
       return res.status(400).json({ error: "user_id and product_id are required" });
+    }
+    if (product_id !== SUBSCRIPTION_PRODUCT_ID) {
+      return res.status(400).json({ error: "Subscriptions are only available for 20L RO Purified Jar" });
     }
 
     const supabase = requireSupabase();

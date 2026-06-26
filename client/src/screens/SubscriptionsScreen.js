@@ -8,6 +8,7 @@ import { getOrCreateMockSession } from "../services/session";
 
 const JAR_DEPOSIT = 250;
 const WATER_CHARGE = 40;
+const SUBSCRIPTION_PRODUCT_ID = "20l-ro-jar";
 const activeStatuses = ["Active", "Paused"];
 const returnStatuses = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned", "Refund Completed", "Cancelled"];
 const pendingReturnStatuses = returnStatuses.filter((status) => status !== "Cancelled");
@@ -43,7 +44,6 @@ export default function SubscriptionsScreen({ navigation }) {
   const [session, setSession] = useState(null);
   const [products, setProducts] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
-  const [selectedProductId, setSelectedProductId] = useState("");
   const [jarCount, setJarCount] = useState(1);
   const [refillQuantities, setRefillQuantities] = useState({});
   const [openRefillId, setOpenRefillId] = useState(null);
@@ -56,8 +56,8 @@ export default function SubscriptionsScreen({ navigation }) {
   const waterCharge = jars * WATER_CHARGE;
   const startCost = jars * (JAR_DEPOSIT + WATER_CHARGE);
   const selectedProduct = useMemo(
-    () => products.find((product) => product.id === selectedProductId) || products[0],
-    [products, selectedProductId]
+    () => products.find((product) => product.id === SUBSCRIPTION_PRODUCT_ID),
+    [products]
   );
 
   const loadData = useCallback(async ({ showLoading = true } = {}) => {
@@ -67,7 +67,6 @@ export default function SubscriptionsScreen({ navigation }) {
       setSession(storedSession);
       const productData = await api.getProducts();
       setProducts(productData);
-      setSelectedProductId((current) => current || productData[0]?.id || "");
       if (storedSession?.user?.id) {
         setSubscriptions(await api.getSubscriptions(storedSession.user.id));
       }
@@ -195,17 +194,9 @@ export default function SubscriptionsScreen({ navigation }) {
         <Text className="text-ink text-2xl font-extrabold my-4">Subscriptions</Text>
         <Text className="text-ink font-extrabold text-lg mb-3">New Subscription</Text>
         <View className="border border-gray-100 rounded-lg p-4 mb-5">
-          <Text className="text-muted text-xs mb-2">Product</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-            {products.map((product) => {
-              const selected = product.id === selectedProduct?.id;
-              return (
-                <TouchableOpacity key={product.id} className={`mr-2 px-4 py-3 rounded-md border ${selected ? "bg-primary border-primary" : "bg-white border-gray-200"}`} onPress={() => setSelectedProductId(product.id)}>
-                  <Text className={selected ? "text-white font-bold" : "text-ink font-bold"}>{product.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <Text className="text-muted text-xs mb-1">Subscription product</Text>
+          <Text className="text-ink text-xl font-extrabold mb-1">{selectedProduct?.name || "20L RO Purified Jar"}</Text>
+          <Text className="text-muted mb-4">Subscriptions are available only for 20L RO purified water jars.</Text>
 
           <Text className="text-muted text-xs mb-2">How many jars?</Text>
           <View className="mb-4">
