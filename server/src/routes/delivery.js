@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
+import { sendPushNotification, shortOrderId } from "../services/notifications.js";
 import { assertValidStatusTransition } from "../utils/orderStatuses.js";
 
 const router = Router();
@@ -91,6 +92,29 @@ router.patch("/orders/:id/status", async (req, res, next) => {
           .eq("id", subscription.id);
         if (subscriptionError) throw subscriptionError;
       }
+    }
+
+    if (isReturn && status === "Picked Up") {
+      sendPushNotification(
+        updatedOrder.user_id,
+        "Empty jars picked up",
+        "Your empty jars have been picked up.",
+        { type: "return_picked_up", orderId: updatedOrder.id, status }
+      );
+    } else if (!isReturn && status === "Picked Up") {
+      sendPushNotification(
+        updatedOrder.user_id,
+        "Order picked up",
+        `Your order #${shortOrderId(updatedOrder.id)} is out for delivery.`,
+        { type: "order_picked_up", orderId: updatedOrder.id, status }
+      );
+    } else if (!isReturn && status === "Delivered") {
+      sendPushNotification(
+        updatedOrder.user_id,
+        "Order delivered",
+        `Your order #${shortOrderId(updatedOrder.id)} has been delivered.`,
+        { type: "order_delivered", orderId: updatedOrder.id, status }
+      );
     }
 
     res.json(updatedOrder);

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
 import { ensureTestUser, TEST_ADDRESS_ID, TEST_USER_ID } from "./auth.js";
+import { sendPushNotification, shortOrderId } from "../services/notifications.js";
 import { assertValidStatusTransition } from "../utils/orderStatuses.js";
 
 const router = Router();
@@ -683,6 +684,20 @@ router.post("/orders/:id/assign", async (req, res, next) => {
       .insert({ order_id: order.id, delivery_boy_id, assigned_at: assignedAt, status: "Assigned", notes: notes || null });
     if (assignmentError) throw assignmentError;
 
+    sendPushNotification(
+      order.user_id,
+      "Delivery boy assigned",
+      `${deliveryBoy.name} has been assigned to your order #${shortOrderId(order.id)}.`,
+      {
+        type: "delivery_boy_assigned",
+        orderId: order.id,
+        status: "Assigned",
+        deliveryBoyId: deliveryBoy.id,
+        deliveryBoyName: deliveryBoy.name,
+        deliveryBoyPhone: deliveryBoy.phone
+      }
+    );
+
     res.status(201).json({ order, delivery_boy: deliveryBoy });
   } catch (error) {
     next(error);
@@ -810,6 +825,33 @@ router.post("/approve-return", async (req, res, next) => {
       }
       const { error: transactionError } = await supabase.from("transactions").insert(transaction);
       if (transactionError) throw transactionError;
+    }
+
+    if (target_status === "Refund Completed" && refundAmount > 0) {
+      sendPushNotification(
+        subscription.user_id,
+        "Refund completed",
+        `₹${refundAmount} has been refunded to your wallet.`,
+        {
+          type: "refund_completed",
+          orderId: updatedOrder.id,
+          subscriptionId: subscription.id,
+          status: target_status,
+          refundAmount
+        }
+      );
+    } else if (target_status === "Picked Up") {
+      sendPushNotification(
+        subscription.user_id,
+        "Empty jars picked up",
+        "Your empty jars have been picked up.",
+        {
+          type: "return_picked_up",
+          orderId: updatedOrder.id,
+          subscriptionId: subscription.id,
+          status: target_status
+        }
+      );
     }
 
     res.json({

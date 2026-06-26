@@ -1,12 +1,28 @@
 import { Router } from "express";
-import { Expo } from "expo-server-sdk";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
+import { sendPushNotification, shortOrderId } from "../services/notifications.js";
 import { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransition } from "../utils/orderStatuses.js";
 
 const router = Router();
-const expo = new Expo();
 const ACTIONABLE_RETURN_SUBSCRIPTION_STATUSES = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned"];
+const ORDER_STATUS_NOTIFICATIONS = {
+  Confirmed: (order) => ({
+    title: "Order confirmed",
+    body: `Your order #${shortOrderId(order.id)} has been confirmed.`,
+    type: "order_confirmed"
+  }),
+  "Picked Up": (order) => ({
+    title: "Order picked up",
+    body: `Your order #${shortOrderId(order.id)} is out for delivery.`,
+    type: "order_picked_up"
+  }),
+  Delivered: (order) => ({
+    title: "Order delivered",
+    body: `Your order #${shortOrderId(order.id)} has been delivered.`,
+    type: "order_delivered"
+  })
+};
 
 export { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransition };
 
@@ -138,42 +154,6 @@ async function attachSubscriptionsToReturns(returnOrders) {
   });
 }
 
-async function notifyOrderStatus(orderId, status) {
-  try {
-    const supabase = requireSupabase();
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("user_id")
-      .eq("id", orderId)
-      .single();
-    if (orderError) throw orderError;
-
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("push_token")
-      .eq("id", order.user_id)
-      .single();
-    if (userError) throw userError;
-
-    if (!user?.push_token || !Expo.isExpoPushToken(user.push_token)) {
-      return;
-    }
-
-    const tickets = await expo.sendPushNotificationsAsync([
-      {
-        to: user.push_token,
-        sound: "default",
-        title: "Order Update",
-        body: `Your order is now: ${status}`,
-        data: { orderId, status }
-      }
-    ]);
-    console.log("Order status push notification queued:", JSON.stringify(tickets));
-  } catch (error) {
-    console.error("Failed to send order status notification", error.message);
-  }
-}
-
 router.post("/", async (req, res, next) => {
   try {
     console.log("POST /orders body:", JSON.stringify(req.body));
@@ -282,6 +262,12 @@ router.post("/", async (req, res, next) => {
       .eq("id", returnSubscription.id)
       .in("status", ["Active", "Paused"]);
       if (subscriptionError) throw subscriptionError;
+      sendPushNotification(
+        returnSubscription.user_id,
+        "Cancellation requested",
+        "Your subscription cancellation request has been submitted.",
+        { type: "subscription_cancellation_requested", orderId: order.id, subscriptionId: returnSubscription.id }
+      );
     }
 
     for (const item of normalizedItems) {
@@ -379,7 +365,15 @@ router.patch("/:id/status", requireAdmin, async (req, res, next) => {
       .select()
       .single();
     if (error) throw error;
-    await notifyOrderStatus(req.params.id, status);
+    const notification = ORDER_STATUS_NOTIFICATIONS[status]?.(data);
+    if (notification) {
+      sendPushNotification(
+        data.user_id,
+        notification.title,
+        notification.body,
+        { type: notification.type, orderId: data.id, status }
+      );
+    }
     res.json(data);
   } catch (error) {
     next(error);
