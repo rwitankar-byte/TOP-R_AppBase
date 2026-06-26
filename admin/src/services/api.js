@@ -36,6 +36,8 @@ export const api = {
       body: JSON.stringify({ quantity_available: quantity })
     }),
   getUsers: () => request("/users"),
+  getCustomers: () => request("/admin/customers"),
+  getCustomer: (id) => request(`/admin/customers/${id}`),
   getDeliveryBoys: () => request("/admin/delivery-boys"),
   createDeliveryBoy: (deliveryBoy) =>
     request("/admin/delivery-boys", { method: "POST", body: JSON.stringify(deliveryBoy) }),

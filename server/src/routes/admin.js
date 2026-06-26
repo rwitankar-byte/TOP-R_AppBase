@@ -56,6 +56,10 @@ const DEMO_DELIVERY_BOYS = [
   { name: "Suresh Delivery", phone: "+919777777777", is_active: true }
 ];
 const LOW_STOCK_THRESHOLD = 50;
+const PENDING_ORDER_STATUSES = ["Placed", "Confirmed", "Assigned", "Picked Up"];
+const ACTIVE_SUBSCRIPTION_STATUSES = ["Active"];
+const CUSTOMER_JAR_STATUSES = ["Active", "Paused", "Cancellation Requested", "Return Pending"];
+const REFUNDABLE_DEPOSIT_STATUSES = ["Active", "Paused", "Cancellation Requested", "Return Pending", "Picked Up", "Returned"];
 
 router.use(requireAdmin);
 
@@ -85,6 +89,65 @@ function countByStatus(items, status) {
 
 function sumAmounts(items, field = "amount") {
   return items.reduce((sum, item) => sum + Number(item[field] || 0), 0);
+}
+
+function defaultAddress(addresses = []) {
+  return addresses.find((address) => address.is_default) || addresses[0] || null;
+}
+
+function addressPreview(address) {
+  if (!address) return "";
+  return [
+    address.full_address,
+    address.landmark,
+    address.area,
+    address.city,
+    address.pincode
+  ].filter(Boolean).join(", ");
+}
+
+function latestDate(items = [], field = "created_at") {
+  return items.reduce((latest, item) => {
+    if (!item?.[field]) return latest;
+    const time = new Date(item[field]).getTime();
+    if (Number.isNaN(time)) return latest;
+    return !latest || time > new Date(latest).getTime() ? item[field] : latest;
+  }, null);
+}
+
+function customerSummary({ user, addresses = [], orders = [], subscriptions = [], payments = [] }) {
+  const userDefaultAddress = defaultAddress(addresses);
+  const paidPayments = payments.filter((payment) => payment.status === "Paid");
+  return {
+    id: user.id,
+    name: user.name,
+    phone: user.phone,
+    wallet_balance: Number(user.wallet_balance || 0),
+    created_at: user.created_at,
+    total_orders: orders.length,
+    active_subscriptions: subscriptions.filter((subscription) => ACTIVE_SUBSCRIPTION_STATUSES.includes(subscription.status)).length,
+    pending_orders: orders.filter((order) => PENDING_ORDER_STATUSES.includes(order.status)).length,
+    total_spent: Number(sumAmounts(paidPayments).toFixed(2)),
+    last_order_at: latestDate(orders),
+    default_address: userDefaultAddress,
+    default_address_preview: addressPreview(userDefaultAddress)
+  };
+}
+
+function calculateCustomerDetailSummary(user, addresses, orders, subscriptions, payments, transactions) {
+  const refundableDepositTotal = subscriptions
+    .filter((subscription) => !subscription.deposit_refunded && REFUNDABLE_DEPOSIT_STATUSES.includes(subscription.status))
+    .reduce((sum, subscription) => sum + Number(subscription.jar_deposit || 0), 0);
+  const jarsCurrentlyWithCustomer = subscriptions
+    .filter((subscription) => CUSTOMER_JAR_STATUSES.includes(subscription.status))
+    .reduce((sum, subscription) => sum + Number(subscription.jar_count || subscription.quantity || 0), 0);
+  return {
+    ...customerSummary({ user, addresses, orders, subscriptions, payments }),
+    refundable_deposit_total: Number(refundableDepositTotal.toFixed(2)),
+    jars_currently_with_customer: jarsCurrentlyWithCustomer,
+    payments_count: payments.length,
+    transactions_count: transactions.length
+  };
 }
 
 async function deleteRows(query) {
@@ -172,6 +235,103 @@ async function ensureSingleDefaultAddress(supabase, userId, phone) {
 
 router.get("/dev/status", (_req, res) => {
   res.json({ enabled: devToolsEnabled() });
+});
+
+router.get("/customers", async (_req, res, next) => {
+  try {
+    const supabase = requireSupabase();
+    const [usersResult, addressesResult, ordersResult, subscriptionsResult, paymentsResult] = await Promise.all([
+      supabase.from("users").select("id,name,phone,wallet_balance,created_at").order("created_at", { ascending: false }),
+      supabase.from("addresses").select("*"),
+      supabase.from("orders").select("id,user_id,total_amount,status,created_at"),
+      supabase.from("subscriptions").select("id,user_id,status"),
+      supabase.from("payments").select("id,user_id,amount,status,created_at")
+    ]);
+
+    for (const result of [usersResult, addressesResult, ordersResult, subscriptionsResult, paymentsResult]) {
+      if (result.error) throw result.error;
+    }
+
+    const addressesByUser = new Map();
+    for (const address of addressesResult.data || []) {
+      addressesByUser.set(address.user_id, [...(addressesByUser.get(address.user_id) || []), address]);
+    }
+
+    const ordersByUser = new Map();
+    for (const order of ordersResult.data || []) {
+      ordersByUser.set(order.user_id, [...(ordersByUser.get(order.user_id) || []), order]);
+    }
+
+    const subscriptionsByUser = new Map();
+    for (const subscription of subscriptionsResult.data || []) {
+      subscriptionsByUser.set(subscription.user_id, [...(subscriptionsByUser.get(subscription.user_id) || []), subscription]);
+    }
+
+    const paymentsByUser = new Map();
+    for (const payment of paymentsResult.data || []) {
+      paymentsByUser.set(payment.user_id, [...(paymentsByUser.get(payment.user_id) || []), payment]);
+    }
+
+    const customers = (usersResult.data || []).map((user) =>
+      customerSummary({
+        user,
+        addresses: addressesByUser.get(user.id) || [],
+        orders: ordersByUser.get(user.id) || [],
+        subscriptions: subscriptionsByUser.get(user.id) || [],
+        payments: paymentsByUser.get(user.id) || []
+      })
+    );
+
+    res.json(customers);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/customers/:id", async (req, res, next) => {
+  try {
+    const supabase = requireSupabase();
+    const userId = req.params.id;
+    const [userResult, addressesResult, ordersResult, subscriptionsResult, paymentsResult, transactionsResult] = await Promise.all([
+      supabase.from("users").select("*").eq("id", userId).maybeSingle(),
+      supabase.from("addresses").select("*").eq("user_id", userId).order("is_default", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("*, addresses(*), delivery_boys(id,name,phone), order_items(*, products(*)), payments(id,amount,status,method,created_at)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
+      supabase.from("subscriptions").select("*, products(*), addresses(*)").eq("user_id", userId).order("start_date", { ascending: false }),
+      supabase.from("payments").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false })
+    ]);
+
+    for (const result of [userResult, addressesResult, ordersResult, subscriptionsResult, paymentsResult, transactionsResult]) {
+      if (result.error) throw result.error;
+    }
+    if (!userResult.data) return res.status(404).json({ error: "Customer not found" });
+
+    const addresses = addressesResult.data || [];
+    const orders = ordersResult.data || [];
+    const subscriptions = subscriptionsResult.data || [];
+    const payments = paymentsResult.data || [];
+    const transactions = transactionsResult.data || [];
+
+    res.json({
+      user: userResult.data,
+      addresses,
+      orders,
+      subscriptions,
+      payments,
+      transactions,
+      wallet_balance: Number(userResult.data.wallet_balance || 0),
+      refundable_deposit_total: calculateCustomerDetailSummary(userResult.data, addresses, orders, subscriptions, payments, transactions).refundable_deposit_total,
+      jars_currently_with_customer: calculateCustomerDetailSummary(userResult.data, addresses, orders, subscriptions, payments, transactions).jars_currently_with_customer,
+      default_address: defaultAddress(addresses),
+      summary: calculateCustomerDetailSummary(userResult.data, addresses, orders, subscriptions, payments, transactions)
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get("/dashboard-summary", async (_req, res, next) => {
