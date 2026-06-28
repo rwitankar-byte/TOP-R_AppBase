@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
+import { formatPaginatedResponse, getPagination } from "../utils/pagination.js";
 
 const router = Router();
 const JAR_DEPOSIT = 250;
@@ -84,16 +85,20 @@ router.post("/", async (req, res, next) => {
 
 router.get("/", requireAdmin, async (req, res, next) => {
   try {
+    const pagination = getPagination(req);
     let query = requireSupabase()
       .from("subscriptions")
-      .select("*, users(phone,name,wallet_balance), products(*), addresses(*)")
+      .select("*, users(phone,name,wallet_balance), products(*), addresses(*)", pagination ? { count: "exact" } : undefined)
       .order("start_date", { ascending: false });
     if (req.query.status) {
       query = query.eq("status", req.query.status);
     }
-    const { data, error } = await query;
+    if (pagination) {
+      query = query.range(pagination.from, pagination.to);
+    }
+    const { data, error, count } = await query;
     if (error) throw error;
-    res.json(data);
+    res.json(pagination ? formatPaginatedResponse(data, count, pagination) : data);
   } catch (error) {
     next(error);
   }

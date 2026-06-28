@@ -2,7 +2,9 @@ import { Router } from "express";
 import { requireSupabase } from "../config/supabase.js";
 import { requireAdmin } from "../middleware/admin.js";
 import { sendPushNotification, shortOrderId } from "../services/notifications.js";
+import { clearCache } from "../utils/cache.js";
 import { VALID_TRANSITIONS, RETURN_VALID_TRANSITIONS, assertValidStatusTransition } from "../utils/orderStatuses.js";
+import { formatPaginatedResponse, getPagination } from "../utils/pagination.js";
 
 const router = Router();
 const ACTIONABLE_RETURN_SUBSCRIPTION_STATUSES = ["Cancellation Requested", "Return Pending", "Picked Up", "Returned"];
@@ -80,9 +82,11 @@ function applyOrderFilters(query, req) {
 
 async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = false } = {}) {
   const supabase = requireSupabase();
+  const pagination = getPagination(req);
+  const selectColumns = "*, users(phone,name), addresses(*), delivery_boys(id,name,phone), order_items(*, products(*)), payments(amount,status,method)";
   let query = supabase
     .from("orders")
-    .select("*, users(phone,name), addresses(*), delivery_boys(id,name,phone), order_items(*, products(*)), payments(amount,status,method)")
+    .select(selectColumns, pagination ? { count: "exact" } : undefined)
     .order("created_at", { ascending: false });
 
   if (userId) {
@@ -96,12 +100,15 @@ async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = fal
   if (pendingOnly) {
     query = query.eq("status", "Placed");
   }
+  if (pagination) {
+    query = query.range(pagination.from, pagination.to);
+  }
 
-  let { data, error } = await query;
+  let { data, error, count } = await query;
   if (error?.message?.includes("type")) {
     let fallbackQuery = supabase
       .from("orders")
-      .select("*, users(phone,name), addresses(*), delivery_boys(id,name,phone), order_items(*, products(*)), payments(amount,status,method)")
+      .select(selectColumns, pagination ? { count: "exact" } : undefined)
       .order("created_at", { ascending: false });
     if (userId) {
       fallbackQuery = fallbackQuery.eq("user_id", userId);
@@ -115,12 +122,16 @@ async function fetchOrders(req, { userId, returnsOnly = false, pendingOnly = fal
     if (req.query.subscription_id) {
       fallbackQuery = fallbackQuery.eq("subscription_id", req.query.subscription_id);
     }
+    if (pagination) {
+      fallbackQuery = fallbackQuery.range(pagination.from, pagination.to);
+    }
     const fallback = await fallbackQuery;
     data = fallback.data;
     error = fallback.error;
+    count = fallback.count;
   }
   if (error) throw error;
-  return data || [];
+  return pagination ? formatPaginatedResponse(data, count, pagination) : data || [];
 }
 
 async function attachSubscriptionsToReturns(returnOrders) {
@@ -270,22 +281,32 @@ router.post("/", async (req, res, next) => {
       );
     }
 
-    for (const item of normalizedItems) {
-      if (orderType === "return" || orderType === "refill") continue;
-      const { data: inventory, error: inventoryError } = await supabase
+    if (orderType !== "return" && orderType !== "refill") {
+      const productIds = [...new Set(normalizedItems.map((item) => item.product_id))];
+      const { data: inventoryRows, error: inventoryError } = await supabase
         .from("inventory")
-        .select("id, quantity_available")
-        .eq("product_id", item.product_id)
-        .maybeSingle();
+        .select("id, product_id, quantity_available")
+        .in("product_id", productIds);
       if (inventoryError) throw inventoryError;
-      if (inventory) {
-        const nextQuantity = Math.max(Number(inventory.quantity_available) - item.quantity, 0);
-        const { error: updateError } = await supabase
+
+      const quantityByProduct = normalizedItems.reduce((map, item) => {
+        map.set(item.product_id, (map.get(item.product_id) || 0) + item.quantity);
+        return map;
+      }, new Map());
+
+      await Promise.all(
+        (inventoryRows || []).map((inventory) => {
+          const nextQuantity = Math.max(Number(inventory.quantity_available) - Number(quantityByProduct.get(inventory.product_id) || 0), 0);
+          return supabase
           .from("inventory")
           .update({ quantity_available: nextQuantity, last_updated: new Date().toISOString() })
-          .eq("id", inventory.id);
-        if (updateError) throw updateError;
-      }
+            .eq("id", inventory.id)
+            .then(({ error: updateError }) => {
+              if (updateError) throw updateError;
+            });
+        })
+      );
+      if ((inventoryRows || []).length) clearCache("inventory:list");
     }
 
     if (payment_id) {

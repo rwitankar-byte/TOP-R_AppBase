@@ -4,6 +4,7 @@ import { requireAdmin } from "../middleware/admin.js";
 import { ensureTestUser, TEST_ADDRESS_ID, TEST_USER_ID } from "./auth.js";
 import { sendPushNotification, shortOrderId } from "../services/notifications.js";
 import { assertValidStatusTransition } from "../utils/orderStatuses.js";
+import { formatPaginatedResponse, getPagination } from "../utils/pagination.js";
 
 const router = Router();
 const JAR_DEPOSIT = 250;
@@ -407,18 +408,35 @@ router.get("/analytics", async (_req, res, next) => {
   }
 });
 
-router.get("/customers", async (_req, res, next) => {
+router.get("/customers", async (req, res, next) => {
   try {
     const supabase = requireSupabase();
-    const [usersResult, addressesResult, ordersResult, subscriptionsResult, paymentsResult] = await Promise.all([
-      supabase.from("users").select("id,name,phone,wallet_balance,created_at").order("created_at", { ascending: false }),
-      supabase.from("addresses").select("*"),
-      supabase.from("orders").select("id,user_id,total_amount,status,created_at"),
-      supabase.from("subscriptions").select("id,user_id,status"),
-      supabase.from("payments").select("id,user_id,amount,status,created_at")
+    const pagination = getPagination(req);
+    let usersQuery = supabase
+      .from("users")
+      .select("id,name,phone,wallet_balance,created_at", pagination ? { count: "exact" } : undefined)
+      .order("created_at", { ascending: false });
+    if (pagination) {
+      usersQuery = usersQuery.range(pagination.from, pagination.to);
+    }
+
+    const usersResult = await usersQuery;
+    if (usersResult.error) throw usersResult.error;
+
+    const users = usersResult.data || [];
+    const userIds = users.map((user) => user.id);
+    if (!userIds.length) {
+      return res.json(pagination ? formatPaginatedResponse([], usersResult.count, pagination) : []);
+    }
+
+    const [addressesResult, ordersResult, subscriptionsResult, paymentsResult] = await Promise.all([
+      supabase.from("addresses").select("*").in("user_id", userIds),
+      supabase.from("orders").select("id,user_id,total_amount,status,created_at").in("user_id", userIds),
+      supabase.from("subscriptions").select("id,user_id,status").in("user_id", userIds),
+      supabase.from("payments").select("id,user_id,amount,status,created_at").in("user_id", userIds)
     ]);
 
-    for (const result of [usersResult, addressesResult, ordersResult, subscriptionsResult, paymentsResult]) {
+    for (const result of [addressesResult, ordersResult, subscriptionsResult, paymentsResult]) {
       if (result.error) throw result.error;
     }
 
@@ -442,7 +460,7 @@ router.get("/customers", async (_req, res, next) => {
       paymentsByUser.set(payment.user_id, [...(paymentsByUser.get(payment.user_id) || []), payment]);
     }
 
-    const customers = (usersResult.data || []).map((user) =>
+    const customers = users.map((user) =>
       customerSummary({
         user,
         addresses: addressesByUser.get(user.id) || [],
@@ -452,7 +470,7 @@ router.get("/customers", async (_req, res, next) => {
       })
     );
 
-    res.json(customers);
+    res.json(pagination ? formatPaginatedResponse(customers, usersResult.count, pagination) : customers);
   } catch (error) {
     next(error);
   }

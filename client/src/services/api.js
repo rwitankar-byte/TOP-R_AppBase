@@ -1,16 +1,30 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_CLIENT_API_URL || "https://top-rappbase-production.up.railway.app";
+const REQUEST_TIMEOUT_MS = 10000;
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const payload = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error || "Request failed");
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+    });
+
+    const payload = response.status === 204 ? null : await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || "Request failed");
+    }
+    return payload;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Request timed out. Check your internet and try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return payload;
 }
 
 export const api = {

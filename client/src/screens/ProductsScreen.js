@@ -39,6 +39,10 @@ export default function ProductsScreen() {
       <FlatList
         data={products}
         keyExtractor={(item) => item.id}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={!loading && !errorMessage ? <EmptyState title="No products available" message="Please check again shortly." /> : null}
         ListFooterComponent={<View className="h-6" />}

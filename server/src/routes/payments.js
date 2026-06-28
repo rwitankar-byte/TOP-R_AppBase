@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Router } from "express";
 import Razorpay from "razorpay";
 import { requireSupabase } from "../config/supabase.js";
+import { formatPaginatedResponse, getPagination } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -47,13 +48,18 @@ router.get("/due/:userId", async (req, res, next) => {
 
 router.get("/:userId", async (req, res, next) => {
   try {
-    const { data, error } = await requireSupabase()
+    const pagination = getPagination(req);
+    let query = requireSupabase()
       .from("payments")
-      .select("*")
+      .select("*", pagination ? { count: "exact" } : undefined)
       .eq("user_id", req.params.userId)
       .order("created_at", { ascending: false });
+    if (pagination) {
+      query = query.range(pagination.from, pagination.to);
+    }
+    const { data, error, count } = await query;
     if (error) throw error;
-    res.json(data);
+    res.json(pagination ? formatPaginatedResponse(data, count, pagination) : data);
   } catch (error) {
     next(error);
   }

@@ -1,11 +1,17 @@
 import { Router } from "express";
 import { requireSupabase, supabaseAdmin } from "../config/supabase.js";
 import { dummyProducts } from "../data/dummyProducts.js";
+import { getCache, setCache } from "../utils/cache.js";
 
 const router = Router();
+const PRODUCTS_CACHE_KEY = "products:list";
+const PRODUCTS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 router.get("/", async (_req, res, next) => {
   try {
+    const cachedProducts = getCache(PRODUCTS_CACHE_KEY);
+    if (cachedProducts) return res.json(cachedProducts);
+
     if (!supabaseAdmin) return res.json(dummyProducts);
     const { data, error } = await requireSupabase()
       .from("products")
@@ -13,6 +19,7 @@ router.get("/", async (_req, res, next) => {
       .eq("is_active", true)
       .order("name");
     if (error) throw error;
+    setCache(PRODUCTS_CACHE_KEY, data, PRODUCTS_CACHE_TTL_MS);
     res.json(data);
   } catch (error) {
     next(error);

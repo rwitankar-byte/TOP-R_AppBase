@@ -1,21 +1,35 @@
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://top-rappbase-production.up.railway.app";
 const ADMIN_KEY = "topr-admin-2024";
+const REQUEST_TIMEOUT_MS = 10000;
 
 async function request(path, options = {}) {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": ADMIN_KEY,
-      ...(options.headers || {})
-    }
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const payload = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error || "Request failed");
+  try {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": ADMIN_KEY,
+        ...(options.headers || {})
+      }
+    });
+
+    const payload = response.status === 204 ? null : await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || "Request failed");
+    }
+    return payload;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Request timed out. Check your internet and try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return payload;
 }
 
 export const api = {

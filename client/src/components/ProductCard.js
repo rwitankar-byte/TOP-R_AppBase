@@ -1,15 +1,24 @@
+import { useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useCart } from "../context/CartContext";
 
 export default function ProductCard({ product, compact = false }) {
   const { items, addToCart, updateQuantity } = useCart();
+  const [imageFailed, setImageFailed] = useState(false);
   const cartItem = items.find((item) => item.type === "product" && item.id === product.id);
   const quantity = Number(cartItem?.quantity || 0);
+  const imageHeightClass = compact ? "h-28 w-full" : "h-40 w-full";
 
   return (
     <View className={`bg-white border border-gray-100 rounded-lg overflow-hidden ${compact ? "w-48 mr-4" : "mb-4"}`}>
-      <Image source={{ uri: product.image_url }} className={compact ? "h-28 w-full" : "h-40 w-full"} />
+      {product.image_url && !imageFailed ? (
+        <Image source={{ uri: product.image_url }} className={imageHeightClass} onError={() => setImageFailed(true)} />
+      ) : (
+        <View className={`${imageHeightClass} bg-wash items-center justify-center`}>
+          <Ionicons name="water-outline" size={32} color="#00B5B0" />
+        </View>
+      )}
       <View className="p-3">
         <Text className="text-ink font-bold text-base" numberOfLines={2}>
           {product.name}

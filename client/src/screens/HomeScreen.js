@@ -95,6 +95,10 @@ export default function HomeScreen({ navigation }) {
           pagingEnabled
           data={banners}
           keyExtractor={(item) => item.id}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
             <View className="w-80 mr-4 bg-primary rounded-lg p-5 min-h-36 justify-center">
@@ -146,6 +150,10 @@ export default function HomeScreen({ navigation }) {
           horizontal
           data={popular}
           keyExtractor={(item) => item.id}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => <ProductCard product={item} compact />}
         />

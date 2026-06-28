@@ -1,11 +1,11 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState([]);
 
-  const addToCart = (product) => {
+  const addToCart = useCallback((product) => {
     setItems((current) => {
       const existing = current.find((item) => item.id === product.id);
       if (existing) {
@@ -15,25 +15,25 @@ export function CartProvider({ children }) {
       }
       return [...current, { ...product, type: product.type || "product", quantity: 1 }];
     });
-  };
+  }, []);
 
-  const addSubscriptionToCart = (subscription) => {
+  const addSubscriptionToCart = useCallback((subscription) => {
     setItems((current) => [...current, { ...subscription, type: "subscription", quantity: 1 }]);
-  };
+  }, []);
 
-  const addRefillToCart = (refill) => {
+  const addRefillToCart = useCallback((refill) => {
     setItems((current) => [...current, { ...refill, type: "refill" }]);
-  };
+  }, []);
 
-  const updateQuantity = (id, quantity) => {
+  const updateQuantity = useCallback((id, quantity) => {
     setItems((current) =>
       current
         .map((item) => (item.id === id ? { ...item, quantity: Math.max(0, quantity) } : item))
         .filter((item) => item.quantity > 0)
     );
-  };
+  }, []);
 
-  const clearCart = () => setItems([]);
+  const clearCart = useCallback(() => setItems([]), []);
 
   const total = useMemo(
     () =>
@@ -44,8 +44,13 @@ export function CartProvider({ children }) {
     [items]
   );
 
+  const value = useMemo(
+    () => ({ items, addToCart, addSubscriptionToCart, addRefillToCart, updateQuantity, clearCart, total }),
+    [addRefillToCart, addSubscriptionToCart, addToCart, clearCart, items, total, updateQuantity]
+  );
+
   return (
-    <CartContext.Provider value={{ items, addToCart, addSubscriptionToCart, addRefillToCart, updateQuantity, clearCart, total }}>
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
