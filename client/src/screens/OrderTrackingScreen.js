@@ -32,6 +32,14 @@ function orderLabel(order) {
   }[order?.type || order?.order_type] || "Order";
 }
 
+function paymentText(order) {
+  if (order?.payment_method === "cash_on_delivery") return "Payment: Cash on Delivery";
+  if (order?.payments?.some((payment) => payment.status === "Paid")) return "Payment: Paid";
+  if (order?.payments?.some((payment) => payment.status === "Pending")) return "Payment: Pending";
+  if (order?.payment_status) return `Payment: ${order.payment_status}`;
+  return null;
+}
+
 export default function OrderTrackingScreen({ route }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,8 +105,10 @@ export default function OrderTrackingScreen({ route }) {
           <>
         <View className="border border-gray-100 rounded-lg p-4 mb-4">
           <Text className="text-primary font-bold">{orderLabel(order)}</Text>
+          {order.source === "ivr" ? <Text className="text-purple-700 font-bold text-xs mt-1">Ordered by Phone</Text> : null}
           <Text className="text-ink font-extrabold mt-1">{order?.id ? `#${order.id.slice(0, 8)}` : route.params?.orderId || "Latest"}</Text>
           <Text className="text-muted mt-2">{statusMessages[order?.status] || "Order status is being updated."}</Text>
+          {paymentText(order) ? <Text className="text-ink font-bold mt-2">{paymentText(order)}</Text> : null}
         </View>
         <View className="border border-gray-100 rounded-lg p-4 mb-5">
           {steps.map((step, index) => {

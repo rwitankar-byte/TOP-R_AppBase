@@ -31,6 +31,33 @@ function addressLines(address) {
   ].filter(Boolean);
 }
 
+function sourceLabel(source) {
+  return { ivr: "IVR", app: "App", admin: "Admin" }[source] || "App";
+}
+
+function paymentMethodLabel(method) {
+  return {
+    online: "Online",
+    cash_on_delivery: "Cash on Delivery",
+    wallet: "Wallet"
+  }[method] || "Not set";
+}
+
+function paymentStatusLabel(order) {
+  if (order.payment_method === "cash_on_delivery") return "Pending";
+  if (order.payments?.some((payment) => payment.status === "Paid")) return "Paid";
+  if (order.payments?.some((payment) => payment.status === "Pending")) return "Pending";
+  if (order.payment_status) {
+    return {
+      pending: "Pending",
+      paid: "Paid",
+      failed: "Failed",
+      refunded: "Refunded"
+    }[order.payment_status] || order.payment_status;
+  }
+  return "Not set";
+}
+
 export default function OrderDetailScreen({ navigation, route }) {
   const [order, setOrder] = useState(route.params.order);
   const [saving, setSaving] = useState(false);
@@ -135,13 +162,18 @@ export default function OrderDetailScreen({ navigation, route }) {
             <Text className="text-ink font-extrabold">{shortId(order.id)}</Text>
             <View className="flex-row items-center">
               {isRefill && <Text className="bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-bold mr-2">Refill</Text>}
+              {order.source === "ivr" && <Text className="bg-purple-100 text-purple-700 px-3 py-1 rounded-md text-xs font-bold mr-2">IVR</Text>}
               <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClass(order.status)}`}>{order.status}</Text>
             </View>
           </View>
           <Text className="text-muted">Customer phone: {order.users?.phone || "Unknown"}</Text>
+          {order.caller_phone ? <Text className="text-muted mt-1">Caller phone: {order.caller_phone}</Text> : null}
           <Text className="text-muted mt-1">Name: {order.users?.name || "Not set"}</Text>
           <Text className="text-muted mt-1">Time: {dateTime(order.created_at)}</Text>
           {order.delivery_boys && <Text className="text-muted mt-1">Delivery boy: {order.delivery_boys.name} • {order.delivery_boys.phone}</Text>}
+          <Text className="text-muted mt-1">Source: {sourceLabel(order.source)}</Text>
+          <Text className="text-muted mt-1">Payment method: {paymentMethodLabel(order.payment_method)}</Text>
+          <Text className="text-muted mt-1">Payment status: {paymentStatusLabel(order)}</Text>
           <Text className="text-primary text-2xl font-extrabold mt-3">{money(order.total_amount)}</Text>
           {isRefill && <Text className="text-blue-700 font-bold mt-2">Subscription refill — delivery boy picks up empty jars</Text>}
         </View>

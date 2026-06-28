@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import EmptyState from "../components/EmptyState";
@@ -8,6 +8,7 @@ import LoadingState from "../components/LoadingState";
 import { useCart } from "../context/CartContext";
 import { api } from "../services/api";
 import { getOrCreateMockSession } from "../services/session";
+import { SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_TEL } from "../config/support";
 
 const JAR_DEPOSIT = 250;
 const WATER_CHARGE = 40;
@@ -191,6 +192,14 @@ export default function SubscriptionsScreen({ navigation }) {
     navigation.navigate("Cart");
   };
 
+  const callToOrder = async () => {
+    try {
+      await Linking.openURL(`tel:${SUPPORT_PHONE_TEL}`);
+    } catch {
+      Alert.alert("Call support", `Please call ${SUPPORT_PHONE_DISPLAY} to order by phone.`);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView
@@ -234,6 +243,13 @@ export default function SubscriptionsScreen({ navigation }) {
         </View>
 
         <Text className="text-ink font-extrabold text-lg mb-3">Active Subscriptions</Text>
+        <View className="bg-wash rounded-lg p-4 mb-4">
+          <Text className="text-ink font-extrabold">Prefer ordering by phone?</Text>
+          <Text className="text-muted mt-1">Call TOP-R Water to order by phone.</Text>
+          <TouchableOpacity className="bg-primary rounded-md px-4 py-3 mt-3 self-start" onPress={callToOrder}>
+            <Text className="text-white font-bold">Call {SUPPORT_PHONE_DISPLAY}</Text>
+          </TouchableOpacity>
+        </View>
         {!loading && activeSubscriptions.length === 0 && (
           <EmptyState icon="repeat-outline" title="No active subscriptions" message="Start a 20L jar subscription to request refills on demand." />
         )}

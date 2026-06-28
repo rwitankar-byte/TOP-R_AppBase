@@ -168,7 +168,21 @@ async function attachSubscriptionsToReturns(returnOrders) {
 router.post("/", async (req, res, next) => {
   try {
     console.log("POST /orders body:", JSON.stringify(req.body));
-    const { user_id, address_id, items = [], total_amount, delivery_date, type = "delivery", payment_id, subscription_id } = req.body;
+    const {
+      user_id,
+      address_id,
+      items = [],
+      total_amount,
+      delivery_date,
+      type = "delivery",
+      payment_id,
+      subscription_id,
+      source = "app",
+      payment_method,
+      payment_status,
+      caller_phone,
+      ivr_call_id
+    } = req.body;
     const orderType = ["delivery", "return", "refill", "subscription"].includes(type) ? type : "delivery";
     const storedOrderType = orderType === "delivery" ? "regular" : orderType;
     if (!user_id || !items.length || (orderType !== "return" && !address_id)) {
@@ -237,7 +251,12 @@ router.post("/", async (req, res, next) => {
       delivery_date,
       status: "Placed",
       type: storedOrderType,
-      subscription_id: ["refill", "return", "subscription"].includes(orderType) ? subscription_id : null
+      subscription_id: ["refill", "return", "subscription"].includes(orderType) ? subscription_id : null,
+      source,
+      payment_method: payment_method || (payment_id ? "online" : null),
+      payment_status: payment_status || (payment_id ? "paid" : "pending"),
+      caller_phone: caller_phone || null,
+      ivr_call_id: ivr_call_id || null
     };
     let { data: order, error: orderError } = await supabase
       .from("orders")

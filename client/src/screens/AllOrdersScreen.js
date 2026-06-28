@@ -49,10 +49,19 @@ function addressPreview(order) {
 }
 
 function paymentStatus(order) {
+  if (order.payment_method === "cash_on_delivery") return "Cash on Delivery";
+  if (order.payments?.some((payment) => payment.status === "Paid")) return "Paid";
+  if (order.payments?.some((payment) => payment.status === "Pending")) return "Pending";
+  if (order.payments?.some((payment) => payment.status === "Failed")) return "Failed";
+  if (order.payment_status) {
+    return {
+      pending: "Pending",
+      paid: "Paid",
+      failed: "Failed",
+      refunded: "Refunded"
+    }[order.payment_status] || order.payment_status;
+  }
   if (!order.payments?.length) return null;
-  if (order.payments.some((payment) => payment.status === "Paid")) return "Paid";
-  if (order.payments.some((payment) => payment.status === "Pending")) return "Pending";
-  if (order.payments.some((payment) => payment.status === "Failed")) return "Failed";
   return order.payments[0].status;
 }
 
@@ -160,6 +169,7 @@ export default function AllOrdersScreen({ navigation }) {
                 <View className="flex-1 mr-2">
                   <Text className="text-ink font-extrabold">#{order.id.slice(0, 8)}</Text>
                   <Text className="text-primary font-bold text-xs mt-1">{orderLabel(order)}</Text>
+                  {order.source === "ivr" ? <Text className="text-purple-700 font-bold text-xs mt-1">Ordered by Phone</Text> : null}
                 </View>
                 <Text className={`px-3 py-1 rounded-md text-xs font-bold ${statusClasses[order.status] || "bg-gray-100 text-gray-700"}`}>{order.status}</Text>
               </View>

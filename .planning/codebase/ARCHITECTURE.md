@@ -33,6 +33,7 @@ Major customer flows:
 - Product order: `ProductsScreen` or `HomeScreen` adds products to cart, `CartScreen` creates Razorpay order, verifies payment, then posts `/orders`.
 - Subscription start: `SubscriptionsScreen` adds subscription item to cart, `CartScreen` creates subscription and a `type: "subscription"` order.
 - Refill: `SubscriptionsScreen` creates refill cart item, `CartScreen` posts `type: "refill"` order.
+- IVR refill: external IVR provider will post caller phone and keypad quantity to `POST /ivr/order`, which creates a COD refill order using the same active-subscription refill validation.
 - Return/cancellation: `SubscriptionsScreen` and `ReturnEmptyJarScreen` create return request orders.
 - Tracking: `OrderTrackingScreen` polls latest/order-specific data and shows status timeline and delivery-boy details.
 
@@ -59,6 +60,7 @@ Stack detail screens include order detail, subscription detail, customer detail,
 - `/orders` -> `server/src/routes/orders.js`
 - `/subscriptions` -> `server/src/routes/subscriptions.js`
 - `/inventory` -> `server/src/routes/inventory.js`
+- `/ivr` -> `server/src/routes/ivr.js`
 - `/payments` -> `server/src/routes/payments.js`
 - `/addresses` -> `server/src/routes/addresses.js`
 - `/users` -> `server/src/routes/users.js`

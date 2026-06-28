@@ -41,6 +41,33 @@ function orderTypeLabel(order) {
   return typeLabels[orderType(order)] || "Product";
 }
 
+function sourceLabel(source) {
+  return { ivr: "IVR", app: "App", admin: "Admin" }[source] || "App";
+}
+
+function paymentMethodLabel(method) {
+  return {
+    online: "Online",
+    cash_on_delivery: "Cash on Delivery",
+    wallet: "Wallet"
+  }[method] || "Not set";
+}
+
+function paymentStatusLabel(order) {
+  if (order.payment_method === "cash_on_delivery") return "Pending";
+  if (order.payments?.some((payment) => payment.status === "Paid")) return "Paid";
+  if (order.payments?.some((payment) => payment.status === "Pending")) return "Pending";
+  if (order.payment_status) {
+    return {
+      pending: "Pending",
+      paid: "Paid",
+      failed: "Failed",
+      refunded: "Refunded"
+    }[order.payment_status] || order.payment_status;
+  }
+  return "Not set";
+}
+
 function itemsText(order) {
   return (order.order_items || [])
     .map((item) => `${item.products?.name || item.product_id} x ${item.quantity}`)
@@ -84,6 +111,9 @@ function matchesSearch(order, rawSearch) {
     order.addresses?.full_address,
     order.delivery_boys?.name,
     order.delivery_boys?.phone,
+    order.source,
+    order.caller_phone,
+    order.payment_method,
     orderType(order),
     orderTypeLabel(order),
     order.status,
@@ -240,6 +270,8 @@ export default function OrdersScreen({ navigation, route }) {
               ) : (
                 <Text className="text-muted mt-1">Delivery boy: Not assigned</Text>
               )}
+              <Text className="text-muted mt-1">Source: {sourceLabel(order.source)}{order.caller_phone ? ` • Caller: ${order.caller_phone}` : ""}</Text>
+              <Text className="text-muted mt-1">Payment: {paymentMethodLabel(order.payment_method)} • {paymentStatusLabel(order)}</Text>
               <Text className="text-muted mt-1">Items: {itemsText(order) || "No items"}</Text>
             </TouchableOpacity>
           );

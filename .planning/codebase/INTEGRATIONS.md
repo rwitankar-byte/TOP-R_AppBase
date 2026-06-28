@@ -80,6 +80,19 @@ Admin-only routes use a shared header:
 
 The current admin key is hardcoded in the app and middleware. This is adequate for MVP/internal testing but is a production-readiness concern.
 
+## IVR Refill Webhook
+
+Phase 1 DTMF IVR ordering is handled by `server/src/routes/ivr.js`, mounted at `/ivr` from `server/src/index.js`.
+
+Routes:
+
+- `GET /ivr/health`
+- `POST /ivr/order`
+
+`POST /ivr/order` accepts caller phone, selected keypad quantity, and optional provider call id. It creates a 20L refill order with `source = ivr`, `payment_method = cash_on_delivery`, and `payment_status = pending`. The flow uses the customer's default address and active 20L subscription.
+
+Implementation notes and provider handoff details are documented in `docs/IVR_ORDERING.md`.
+
 ## Dev Tools Integration
 
 Admin dev tools are gated by `ADMIN_DEV_TOOLS_ENABLED=true`.
