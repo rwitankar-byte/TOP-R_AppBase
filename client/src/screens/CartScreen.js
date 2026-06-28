@@ -157,7 +157,7 @@ export default function CartScreen({ navigation }) {
 
       const userPhone = session.user.phone || session.profile?.phone;
       const userName = session.profile?.name;
-      const contact = userPhone ? userPhone.replace(/\D/g, "") : "9999999999";
+      const contact = userPhone ? userPhone.replace(/\D/g, "") : "";
       const options = {
         description: "Water jar order",
         image: "",

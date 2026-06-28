@@ -7,7 +7,7 @@ import {
   SUPPORT_EMAIL_SUBJECT,
   SUPPORT_PHONE_DISPLAY,
   SUPPORT_PHONE_TEL,
-  SUPPORT_WHATSAPP,
+  SUPPORT_WHATSAPP_URL,
   SUPPORT_WHATSAPP_MESSAGE
 } from "../config/support";
 import ErrorState from "../components/ErrorState";
@@ -98,7 +98,7 @@ export default function ProfileScreen({ navigation }) {
     "Call Support": () => openSupportLink(`tel:${SUPPORT_PHONE_TEL}`, `Unable to open dialer. Please call ${SUPPORT_PHONE_DISPLAY}.`),
     "WhatsApp Support": () =>
       openSupportLink(
-        `whatsapp://send?phone=${SUPPORT_WHATSAPP}&text=${encodeURIComponent(SUPPORT_WHATSAPP_MESSAGE)}`,
+        `${SUPPORT_WHATSAPP_URL}?text=${encodeURIComponent(SUPPORT_WHATSAPP_MESSAGE)}`,
         `Unable to open WhatsApp. Please message or call ${SUPPORT_PHONE_DISPLAY}.`
       ),
     "Email Support": () =>
