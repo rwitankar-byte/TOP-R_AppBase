@@ -14,6 +14,7 @@ import paymentRoutes from "./routes/payments.js";
 import productRoutes from "./routes/products.js";
 import subscriptionRoutes from "./routes/subscriptions.js";
 import userRoutes from "./routes/users.js";
+import { logSupabaseError } from "./utils/logSupabaseError.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -38,7 +39,16 @@ app.use("/addresses", addressRoutes);
 app.use("/users", userRoutes);
 
 app.use((error, _req, res, _next) => {
-  console.error(error);
+  if (
+    /fetch failed/i.test(error?.message || "")
+    || error?.name === "PostgrestError"
+    || error?.status === 0
+    || (error?.status >= 500 && error?.details !== undefined)
+  ) {
+    logSupabaseError("API upstream fetch failed", error);
+  } else {
+    console.error(error);
+  }
   res.status(error.status || 500).json({ error: error.message || "Internal server error" });
 });
 

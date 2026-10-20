@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { supabaseAdmin, supabaseAuth } from "../config/supabase.js";
+import { logSupabaseError } from "../utils/logSupabaseError.js";
 
 const router = Router();
 export const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -44,9 +45,9 @@ export async function ensureTestUser() {
   return user;
 }
 
-ensureTestUser().catch((error) => {
-  console.error("Failed to seed test user", error.message);
-});
+if (process.env.NODE_ENV !== "production") {
+  ensureTestUser().catch((error) => logSupabaseError("Failed to seed test user", error));
+}
 
 router.post("/test-user", async (_req, res, next) => {
   try {
